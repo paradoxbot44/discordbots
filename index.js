@@ -1,41 +1,42 @@
--0
-+45
-    await interaction.reply({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
+
+client.once('ready', () => {
+  console.log(`${client.user.tag} aktif!`);
+});
+
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const { commandName } = interaction;
+
+  if (commandName === 'ping') {
+    await interaction.reply('Pong! 🏓');
   }
+
   if (commandName === 'kapali') {
     const sebep = interaction.options.getString('sebep') || 'Belirtilmedi';
-    const sure = interaction.options.getString('sure') || null;
-    const logoUrl = client.user.displayAvatarURL({ size: 512 });
+    const sure = interaction.options.getString('sure') || 'Belirtilmedi';
+
     const embed = new EmbedBuilder()
-      .setColor(0xFF0000)
-      .setAuthor({ name: 'Guardix FiveM', iconURL: logoUrl })
+      .setColor(0xff0000)
       .setTitle('🔴 SUNUCU KAPALI')
-      .setDescription(
-        '```diff\n- ❌ Sunucumuz şu an bakımda veya kapalı.\n```\n' +
-        '> Açıldığında tekrar duyurulacak, takipte kalın!'
-      )
-      .setThumbnail(logoUrl)
+      .setDescription('Sunucu şu an bakımda veya kapalı.')
       .addFields(
-        {
-          name: '📊 Sunucu Durumu',
-          value: '```ansi\n\u001b[2;31m● OFFLİNE\u001b[0m\n```',
-          inline: true,
-        },
-        {
-          name: '❓ Kapatma Sebebi',
-          value: `\`\`\`${sebep}\`\`\``,
-          inline: true,
-        },
-        { name: '\u200b', value: '\u200b', inline: true },
-      );
-    if (sure) {
-      embed.addFields({ name: '⏳ Tahmini Açılış', value: `\`\`\`${sure}\`\`\`` });
-    }
-    embed
-      .addFields(
-        { name: '📢 Duyuran', value: `<@${interaction.user.id}>`, inline: true },
-        { name: '🕐 Saat', value: `<t:${Math.floor(Date.now() / 1000)}:T>`, inline: true },
+        { name: 'Sebep', value: sebep, inline: true },
+        { name: 'Tahmini Açılış', value: sure, inline: true }
       )
-      .setImage(logoUrl)
-      .setFooter({ text: 'Guardix FiveM • Yakında görüşürüz! 🙏', iconURL: logoUrl })
       .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+});
+
+client.login(process.env.TOKEN);
