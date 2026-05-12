@@ -15,6 +15,7 @@ const {
   PermissionsBitField
 } = require('discord.js');
 
+/* ================= CLIENT ================= */
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
@@ -27,14 +28,18 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('basvuru')
-    .setDescription('👮 Yetkili başvuru formu')
+    .setDescription('👮 Yetkili başvuru formunu açar')
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-/* ================= READY ================= */
+/* ================= READY + SLASH REGISTER ================= */
 client.once('ready', async () => {
+  console.log("================================");
   console.log("BOT ONLINE:", client.user.tag);
+  console.log("CLIENT_ID:", process.env.CLIENT_ID);
+  console.log("GUILD_ID:", process.env.GUILD_ID);
+  console.log("================================");
 
   try {
     await rest.put(
@@ -45,9 +50,9 @@ client.once('ready', async () => {
       { body: commands }
     );
 
-    console.log("Slash commands loaded ✔");
+    console.log("SLASH COMMANDS REGISTERED ✔");
   } catch (err) {
-    console.log("Slash error ❌", err);
+    console.log("SLASH REGISTER ERROR ❌", err);
   }
 });
 
@@ -56,10 +61,10 @@ client.on('interactionCreate', async (interaction) => {
 
   try {
 
-    /* ===== SLASH COMMANDS ===== */
+    /* ===== SLASH ===== */
     if (interaction.isChatInputCommand()) {
 
-      /* ===== TICKET PANEL ===== */
+      /* ===== TICKET ===== */
       if (interaction.commandName === 'ticket') {
 
         const embed = new EmbedBuilder()
@@ -89,12 +94,12 @@ client.on('interactionCreate', async (interaction) => {
 
         const isim = new TextInputBuilder()
           .setCustomId("isim")
-          .setLabel("İsmin")
+          .setLabel("İsim")
           .setStyle(TextInputStyle.Short);
 
         const yas = new TextInputBuilder()
           .setCustomId("yas")
-          .setLabel("Yaşın")
+          .setLabel("Yaş")
           .setStyle(TextInputStyle.Short);
 
         const deneyim = new TextInputBuilder()
@@ -142,7 +147,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    /* ===== MODAL ===== */
+    /* ===== MODAL SUBMIT ===== */
     if (interaction.isModalSubmit()) {
 
       if (interaction.customId === "basvuru_form") {
