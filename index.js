@@ -30,44 +30,39 @@ const client = new Client({
 });
 
 // ================= DATA =================
-let messages = {};
+let data = {};
 
 // ================= SLASH COMMANDS =================
 const commands = [
 
   new SlashCommandBuilder()
     .setName("panel")
-    .setDescription("📌 Ana panel"),
+    .setDescription("📌 Guardix Panel"),
 
   new SlashCommandBuilder()
     .setName("ticket")
-    .setDescription("🎫 Ticket sistemi"),
+    .setDescription("🎫 Ticket Sistemi"),
 
   new SlashCommandBuilder()
     .setName("apply")
-    .setDescription("🛡 Yetkili başvuru"),
+    .setDescription("🛡 Yetkili Başvuru"),
 
   new SlashCommandBuilder()
     .setName("topaktif")
-    .setDescription("🏆 Leaderboard"),
-
-  new SlashCommandBuilder()
-    .setName("etkinlik")
-    .setDescription("🎉 Etkinlik başlat"),
+    .setDescription("🏆 Aktiflik Sıralama"),
 
   new SlashCommandBuilder()
     .setName("duyuru")
     .setDescription("📢 Duyuru yap")
-    .addStringOption(option =>
-      option
-        .setName("mesaj")
+    .addStringOption(opt =>
+      opt.setName("mesaj")
         .setDescription("Duyuru mesajı")
         .setRequired(true)
     )
 
-].map(cmd => cmd.toJSON());
+].map(c => c.toJSON());
 
-// ================= READY =================
+// ================= REGISTER =================
 client.once("ready", async () => {
 
   console.log(`${client.user.tag} aktif`);
@@ -88,16 +83,14 @@ client.once("ready", async () => {
   }
 });
 
-// ================= MESSAGE TRACK =================
-client.on("messageCreate", (msg) => {
+// ================= ACTIVITY TRACK =================
+client.on("messageCreate", msg => {
 
   if (msg.author.bot) return;
 
-  if (!messages[msg.author.id]) {
-    messages[msg.author.id] = 0;
-  }
+  if (!data[msg.author.id]) data[msg.author.id] = 0;
 
-  messages[msg.author.id]++;
+  data[msg.author.id]++;
 });
 
 // ================= INTERACTION =================
@@ -124,13 +117,20 @@ client.on("interactionCreate", async (interaction) => {
       );
 
       return interaction.reply({
-        content: "📌 Ana Panel",
+        content: "📌 Guardix Panel",
         components: [row]
       });
     }
 
-    // TICKET
+    // TICKET MENU
     if (interaction.commandName === "ticket") {
+
+      const embed = new EmbedBuilder()
+        .setTitle("🎫 Guardix Ticket Sistemi")
+        .setDescription("Destek ekibine ulaşmak için ticket aç.")
+        .setColor("Blue")
+        .setThumbnail("https://i.imgur.com/your-logo.png")
+        .setFooter({ text: "Guardix Support System" });
 
       const row = new ActionRowBuilder().addComponents(
 
@@ -142,12 +142,12 @@ client.on("interactionCreate", async (interaction) => {
       );
 
       return interaction.reply({
-        content: "🎫 Ticket Sistemi",
+        embeds: [embed],
         components: [row]
       });
     }
 
-    // APPLY
+    // APPLY PANEL
     if (interaction.commandName === "apply") {
 
       const row = new ActionRowBuilder().addComponents(
@@ -160,153 +160,117 @@ client.on("interactionCreate", async (interaction) => {
       );
 
       return interaction.reply({
-        content: "🛡 Başvuru Sistemi",
+        content: "🛡 Guardix Yetkili Başvuru",
         components: [row]
       });
     }
 
-    // TOPAKTIF
+    // LEADERBOARD
     if (interaction.commandName === "topaktif") {
 
-      const top = Object.entries(messages)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map((user, index) =>
-          `${index + 1}. <@${user[0]}> - ${user[1]} mesaj`
-        )
+      const top = Object.entries(data)
+        .sort((a,b)=>b[1]-a[1])
+        .slice(0,10)
+        .map((u,i)=>`${i+1}. <@${u[0]}> - ${u[1]} mesaj`)
         .join("\n");
 
       return interaction.reply({
-        content: `🏆 Top Aktifler\n\n${top || "Veri yok"}`
-      });
-    }
-
-    // ETKINLIK
-    if (interaction.commandName === "etkinlik") {
-
-      const embed = new EmbedBuilder()
-        .setTitle("🎉 Etkinlik Başladı")
-        .setDescription("Sunucuda etkinlik başladı!")
-        .setColor("Purple");
-
-      return interaction.reply({
-        embeds: [embed]
+        content: `🏆 Aktiflik\n\n${top || "Veri yok"}`
       });
     }
 
     // DUYURU
     if (interaction.commandName === "duyuru") {
 
-      const mesaj = interaction.options.getString("mesaj");
+      const msg = interaction.options.getString("mesaj");
 
       const embed = new EmbedBuilder()
         .setTitle("📢 DUYURU")
-        .setDescription(mesaj)
+        .setDescription(msg)
         .setColor("Red");
 
-      interaction.guild.channels.cache.forEach(channel => {
-
-        if (channel.isTextBased()) {
-          channel.send({
-            embeds: [embed]
-          }).catch(() => {});
-        }
-
+      interaction.guild.channels.cache.forEach(c => {
+        if (c.isTextBased()) c.send({ embeds: [embed] }).catch(()=>{});
       });
 
-      return interaction.reply({
-        content: "Duyuru gönderildi ✔",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "Duyuru gönderildi ✔", ephemeral: true });
     }
   }
 
   // ================= BUTTONS =================
 
-  // OPEN TICKET
+  // TICKET OPEN
   if (interaction.customId === "ticket_open") {
 
     const channel = await interaction.guild.channels.create({
       name: `ticket-${interaction.user.username}`,
       type: ChannelType.GuildText,
-
       permissionOverwrites: [
-
-        {
-          id: interaction.guild.id,
-          deny: [PermissionsBitField.Flags.ViewChannel]
-        },
-
-        {
-          id: interaction.user.id,
-          allow: [
-            PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages
-          ]
-        }
-
+        { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
       ]
     });
 
     const row = new ActionRowBuilder().addComponents(
 
       new ButtonBuilder()
-        .setCustomId("claim_ticket")
+        .setCustomId("claim")
         .setLabel("📌 Claim")
         .setStyle(ButtonStyle.Success),
 
       new ButtonBuilder()
-        .setCustomId("close_ticket")
+        .setCustomId("close")
         .setLabel("❌ Close")
         .setStyle(ButtonStyle.Danger)
 
     );
 
+    const embed = new EmbedBuilder()
+      .setTitle("🎫 Guardix Ticket")
+      .setColor("Blue")
+      .setThumbnail("https://i.imgur.com/your-logo.png")
+      .setDescription("Destek ekibi yakında ilgilenecek.");
+
     channel.send({
-      content: `🎫 Hoşgeldin <@${interaction.user.id}>`,
+      embeds: [embed],
       components: [row]
     });
 
-    return interaction.reply({
-      content: "Ticket açıldı ✔",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "Ticket açıldı ✔", ephemeral: true });
   }
 
-  // CLAIM
-  if (interaction.customId === "claim_ticket") {
-
-    return interaction.reply({
-      content: `📌 Ticket sahiplenildi: <@${interaction.user.id}>`
-    });
-  }
-
-  // CLOSE
-  if (interaction.customId === "close_ticket") {
-
-    return interaction.channel.delete();
-  }
-
-  // APPLY OPEN
+  // APPLY OPEN (MODAL)
   if (interaction.customId === "apply_open") {
 
     const modal = new ModalBuilder()
-      .setCustomId("apply_modal")
-      .setTitle("🛡 Yetkili Başvuru");
+      .setCustomId("apply_form")
+      .setTitle("🛡 Guardix Başvuru");
 
-    const ageInput = new TextInputBuilder()
+    const q1 = new TextInputBuilder()
       .setCustomId("age")
       .setLabel("Yaş")
       .setStyle(TextInputStyle.Short);
 
-    const expInput = new TextInputBuilder()
+    const q2 = new TextInputBuilder()
       .setCustomId("exp")
       .setLabel("Deneyim")
       .setStyle(TextInputStyle.Paragraph);
 
+    const q3 = new TextInputBuilder()
+      .setCustomId("reason")
+      .setLabel("Neden yetkili olmak istiyorsun?")
+      .setStyle(TextInputStyle.Paragraph);
+
+    const q4 = new TextInputBuilder()
+      .setCustomId("active")
+      .setLabel("Günlük aktiflik süren?")
+      .setStyle(TextInputStyle.Short);
+
     modal.addComponents(
-      new ActionRowBuilder().addComponents(ageInput),
-      new ActionRowBuilder().addComponents(expInput)
+      new ActionRowBuilder().addComponents(q1),
+      new ActionRowBuilder().addComponents(q2),
+      new ActionRowBuilder().addComponents(q3),
+      new ActionRowBuilder().addComponents(q4)
     );
 
     return interaction.showModal(modal);
@@ -315,10 +279,12 @@ client.on("interactionCreate", async (interaction) => {
   // ================= MODAL =================
   if (interaction.isModalSubmit()) {
 
-    if (interaction.customId === "apply_modal") {
+    if (interaction.customId === "apply_form") {
 
       const age = interaction.fields.getTextInputValue("age");
       const exp = interaction.fields.getTextInputValue("exp");
+      const reason = interaction.fields.getTextInputValue("reason");
+      const active = interaction.fields.getTextInputValue("active");
 
       const channel = await interaction.guild.channels.create({
         name: `başvuru-${interaction.user.username}`,
@@ -328,25 +294,28 @@ client.on("interactionCreate", async (interaction) => {
       const row = new ActionRowBuilder().addComponents(
 
         new ButtonBuilder()
-          .setCustomId("apply_accept")
+          .setCustomId("accept")
           .setLabel("✔ Kabul")
           .setStyle(ButtonStyle.Success),
 
         new ButtonBuilder()
-          .setCustomId("apply_deny")
+          .setCustomId("deny")
           .setLabel("❌ Red")
           .setStyle(ButtonStyle.Danger)
 
       );
 
       const embed = new EmbedBuilder()
-        .setTitle("🛡 Yeni Başvuru")
+        .setTitle("🛡 Guardix Başvuru")
+        .setColor("Blue")
+        .setThumbnail("https://i.imgur.com/your-logo.png")
         .addFields(
           { name: "Kullanıcı", value: `<@${interaction.user.id}>` },
           { name: "Yaş", value: age },
-          { name: "Deneyim", value: exp }
-        )
-        .setColor("Blue");
+          { name: "Deneyim", value: exp },
+          { name: "Sebep", value: reason },
+          { name: "Aktiflik", value: active }
+        );
 
       channel.send({
         embeds: [embed],
@@ -354,26 +323,27 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       return interaction.reply({
-        content: "Başvurun gönderildi ✔",
+        content: "Başvurun alındı ✔",
         ephemeral: true
       });
     }
   }
 
-  // ACCEPT
-  if (interaction.customId === "apply_accept") {
-
-    return interaction.reply({
-      content: "✔ Başvuru kabul edildi"
-    });
+  // ACCEPT / DENY
+  if (interaction.customId === "accept") {
+    return interaction.reply("✔ Kabul edildi");
   }
 
-  // DENY
-  if (interaction.customId === "apply_deny") {
+  if (interaction.customId === "deny") {
+    return interaction.reply("❌ Reddedildi");
+  }
 
-    return interaction.reply({
-      content: "❌ Başvuru reddedildi"
-    });
+  if (interaction.customId === "claim") {
+    return interaction.reply(`📌 Claim: <@${interaction.user.id}>`);
+  }
+
+  if (interaction.customId === "close") {
+    return interaction.channel.delete();
   }
 
 });
