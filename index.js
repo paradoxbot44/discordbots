@@ -1,10 +1,6 @@
-console.log("BOT BAŞLADI");const {
+const {
   Client,
   GatewayIntentBits,
-  Collection,
-  REST,
-  Routes,
-  SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -13,36 +9,26 @@ console.log("BOT BAŞLADI");const {
   TextInputBuilder,
   TextInputStyle,
   PermissionsBitField,
-  ChannelType
+  ChannelType,
+  SlashCommandBuilder,
+  REST,
+  Routes
 } = require("discord.js");
 
-const fs = require("fs");
 const config = require("./config");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.MessageContent
   ]
 });
 
-client.commands = new Collection();
-
-// ===================== AKTİFLİK SİSTEMİ =====================
-
+// ================== AKTİFLİK ==================
 let data = {};
-if (fs.existsSync("./messages.json")) {
-  data = JSON.parse(fs.readFileSync("./messages.json"));
-}
 
-function save() {
-  fs.writeFileSync("./messages.json", JSON.stringify(data, null, 2));
-}
-
-// ===================== SLASH KOMUTLAR =====================
-
+// ================== SLASH KOMUT ==================
 const commands = [
   new SlashCommandBuilder()
     .setName("panel")
@@ -64,73 +50,52 @@ client.once("ready", async () => {
   );
 });
 
-// ===================== MESAJ SAYMA =====================
-
+// ================== MESAJ SAYMA ==================
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
 
   if (!data[message.author.id]) data[message.author.id] = 0;
-
   data[message.author.id]++;
-  save();
 });
 
-// ===================== INTERACTION =====================
-
+// ================== INTERACTION ==================
 client.on("interactionCreate", async (interaction) => {
 
-  // ================= PANEL =================
+  // ===== SLASH =====
   if (interaction.isChatInputCommand()) {
 
     if (interaction.commandName === "panel") {
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId("ticket_open")
+          .setCustomId("ticket")
           .setLabel("🎫 Ticket Aç")
           .setStyle(ButtonStyle.Primary),
 
         new ButtonBuilder()
-          .setCustomId("apply_open")
-          .setLabel("🛡️ Yetkili Başvuru")
+          .setCustomId("apply")
+          .setLabel("🛡 Başvuru")
           .setStyle(ButtonStyle.Success)
       );
 
-      const embed = new EmbedBuilder()
-        .setTitle("Panel")
-        .setDescription("Ticket veya başvuru açabilirsiniz")
-        .setColor("Blue");
-
       return interaction.reply({
-        embeds: [embed],
+        content: "Panel",
         components: [row]
       });
     }
 
-    // ================= AKTİF =================
     if (interaction.commandName === "aktif") {
+      let topUser = Object.keys(data).sort((a,b)=>data[b]-data[a])[0];
 
-      let topUser = null;
-      let topCount = 0;
-
-      for (const id in data) {
-        if (data[id] > topCount) {
-          topCount = data[id];
-          topUser = id;
-        }
-      }
-
-      return interaction.reply({
-        content: `🏆 En aktif: <@${topUser}> - ${topCount} mesaj`
-      });
+      return interaction.reply(`En aktif: <@${topUser}>`);
     }
   }
 
-  // ================= TICKET =================
-
+  // ===== BUTTON =====
   if (interaction.isButton()) {
 
-    if (interaction.customId === "ticket_open") {
+    // TICKET
+    if (interaction.customId === "ticket") {
 
       const channel = await interaction.guild.channels.create({
         name: `ticket-${interaction.user.username}`,
@@ -142,39 +107,16 @@ client.on("interactionCreate", async (interaction) => {
           },
           {
             id: interaction.user.id,
-            allow: [
-              PermissionsBitField.Flags.ViewChannel,
-              PermissionsBitField.Flags.SendMessages
-            ]
+            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
           }
         ]
       });
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("ticket_close")
-          .setLabel("❌ Kapat")
-          .setStyle(ButtonStyle.Danger)
-      );
-
-      await channel.send({
-        content: "Ticket açıldı",
-        components: [row]
-      });
-
-      return interaction.reply({
-        content: `Ticket açıldı: ${channel}`,
-        ephemeral: true
-      });
+      return interaction.reply({ content: `Ticket açıldı: ${channel}`, ephemeral: true });
     }
 
-    // ================= TICKET KAPAT =================
-    if (interaction.customId === "ticket_close") {
-      await interaction.channel.delete();
-    }
-
-    // ================= BAŞVURU =================
-    if (interaction.customId === "apply_open") {
+    // BAŞVURU
+    if (interaction.customId === "apply") {
 
       const modal = new ModalBuilder()
         .setCustomId("apply_form")
@@ -199,8 +141,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ================= MODAL =================
-
+  // ===== MODAL =====
   if (interaction.isModalSubmit()) {
 
     if (interaction.customId === "apply_form") {
@@ -213,20 +154,7 @@ client.on("interactionCreate", async (interaction) => {
         type: ChannelType.GuildText
       });
 
-      const embed = new EmbedBuilder()
-        .setTitle("Yeni Başvuru")
-        .addFields(
-          { name: "Kullanıcı", value: `${interaction.user}` },
-          { name: "Yaş", value: age },
-          { name: "Sebep", value: reason }
-        );
-
-      await channel.send({ embeds: [embed] });
-
-      return interaction.reply({
-        content: "Başvurun alındı",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "Başvurun alındı", ephemeral: true });
     }
   }
 });
