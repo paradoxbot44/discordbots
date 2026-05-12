@@ -12,21 +12,22 @@ const {
   PermissionsBitField
 } = require('discord.js');
 
+/* ================= BOT ================= */
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* ================= SLASH COMMANDS ================= */
+/* ================= SLASH COMMAND ================= */
 const commands = [
   new SlashCommandBuilder()
     .setName('panel')
-    .setDescription('Ticket panelini açar')
+    .setDescription('Ticket ve başvuru panelini açar')
     .toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-/* ================= BOT READY + REGISTER ================= */
+/* ================= READY ================= */
 client.once('ready', async () => {
   console.log(`${client.user.tag} aktif!`);
 
@@ -36,9 +37,9 @@ client.once('ready', async () => {
       { body: commands }
     );
 
-    console.log('Slash komutlar yüklendi!');
+    console.log('Slash komut başarıyla yüklendi!');
   } catch (err) {
-    console.log('Slash hata:', err);
+    console.log('Slash register hata:', err);
   }
 });
 
@@ -46,15 +47,15 @@ client.once('ready', async () => {
 client.on('interactionCreate', async (interaction) => {
   try {
 
-    /* ===== SLASH COMMAND ===== */
+    /* ===== SLASH ===== */
     if (interaction.isChatInputCommand()) {
 
       if (interaction.commandName === 'panel') {
 
         const embed = new EmbedBuilder()
           .setTitle('📌 DESTEK PANELİ')
-          .setDescription('Aşağıdan seçim yap:')
-          .setColor(0x2b2d31);
+          .setDescription('Aşağıdan seçim yapabilirsiniz.')
+          .setColor(0x00AEFF);
 
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
@@ -75,10 +76,10 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    /* ===== BUTTONS ===== */
+    /* ===== BUTTON ===== */
     if (interaction.isButton()) {
 
-      /* ===== TICKET ===== */
+      /* TICKET */
       if (interaction.customId === 'ticket') {
 
         const channel = await interaction.guild.channels.create({
@@ -105,10 +106,10 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      /* ===== YETKİLİ BAŞVURU ===== */
+      /* BAŞVURU */
       if (interaction.customId === 'basvuru') {
         return interaction.reply({
-          content: '👮 Başvuru sistemi aktif. Yakında form sistemi eklenecek.',
+          content: '👮 Yetkili başvurusu alındı. Yakında form sistemi eklenecek.',
           ephemeral: true
         });
       }
