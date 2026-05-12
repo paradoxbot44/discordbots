@@ -1,9 +1,6 @@
 const {
   Client,
   GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -28,164 +25,196 @@ const client = new Client({
 // ================= DATA =================
 let data = {};
 
-// ================= SLASH COMMANDS =================
-const commands = [
-  new SlashCommandBuilder().setName("panel").setDescription("📌 Panel"),
-  new SlashCommandBuilder().setName("ticket").setDescription("🎫 Ticket"),
-  new SlashCommandBuilder().setName("apply").setDescription("🛡 Başvuru"),
-  new SlashCommandBuilder().setName("topaktif").setDescription("🏆 Leaderboard"),
-  new SlashCommandBuilder()
-    .setName("duyuru")
-    .setDescription("📢 Duyuru yap")
-    .addStringOption(opt =>
-      opt.setName("mesaj")
-        .setDescription("Duyuru mesajı")
-        .setRequired(true)
-    )
-].map(c => c.toJSON());
-
-// ================= REGISTER =================
-const rest = new REST({ version: "10" }).setToken(config.TOKEN);
-
-async function register() {
-  try {
-    console.log("Slash register başlıyor...");
-
-    await rest.put(
-      Routes.applicationGuildCommands(config.CLIENT_ID, config.GUILD_ID),
-      { body: commands }
-    );
-
-    console.log("Slash register OK ✔");
-  } catch (err) {
-    console.log("Register hata:", err);
-  }
-}
-
 // ================= READY =================
-client.once("ready", async () => {
+client.once("ready", () => {
   console.log(`${client.user.tag} aktif`);
-  await register();
 });
 
-// ================= MESSAGE TRACK =================
+// ================= MESSAGE XP =================
 client.on("messageCreate", (msg) => {
+
   if (msg.author.bot) return;
 
   if (!data[msg.author.id]) data[msg.author.id] = 0;
+
   data[msg.author.id]++;
 });
 
-// ================= INTERACTIONS =================
+// ================= INTERACTION =================
 client.on("interactionCreate", async (interaction) => {
 
-  // ========== SLASH ==========
   if (interaction.isChatInputCommand()) {
 
-    // 📌 PANEL
+    // ================= PANEL =================
     if (interaction.commandName === "panel") {
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_open").setLabel("🎫 Ticket").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("apply_open").setLabel("🛡 Başvuru").setStyle(ButtonStyle.Success)
+
+        new ButtonBuilder()
+          .setCustomId("ticket_open")
+          .setLabel("🎫 Ticket")
+          .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+          .setCustomId("apply_open")
+          .setLabel("🛡 Başvuru")
+          .setStyle(ButtonStyle.Success)
+
       );
 
-      return interaction.reply({ content: "📌 Panel", components: [row] });
+      return interaction.reply({
+        content: "📌 Ana Panel",
+        components: [row]
+      });
     }
 
-    // 🎫 TICKET
+    // ================= TICKET =================
     if (interaction.commandName === "ticket") {
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Ticket Sistemi")
-        .setColor("Blue");
-
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_open").setLabel("Aç").setStyle(ButtonStyle.Primary)
+        new ButtonBuilder()
+          .setCustomId("ticket_open")
+          .setLabel("🎫 Ticket Aç")
+          .setStyle(ButtonStyle.Primary)
       );
 
-      return interaction.reply({ embeds: [embed], components: [row] });
+      return interaction.reply({
+        content: "🎫 Ticket Sistemi",
+        components: [row]
+      });
     }
 
-    // 🛡 APPLY
+    // ================= APPLY =================
     if (interaction.commandName === "apply") {
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("apply_open").setLabel("Başvur").setStyle(ButtonStyle.Success)
+        new ButtonBuilder()
+          .setCustomId("apply_open")
+          .setLabel("🛡 Başvur")
+          .setStyle(ButtonStyle.Success)
       );
 
-      return interaction.reply({ content: "🛡 Başvuru Panel", components: [row] });
+      return interaction.reply({
+        content: "🛡 Başvuru Sistemi",
+        components: [row]
+      });
     }
 
-    // 🏆 LEADERBOARD
+    // ================= LEADERBOARD =================
     if (interaction.commandName === "topaktif") {
 
       let top = Object.entries(data)
         .sort((a,b)=>b[1]-a[1])
         .slice(0,10)
-        .map((u,i)=>`${i+1}. <@${u[0]}> - ${u[1]}`)
+        .map((u,i)=>`${i+1}. <@${u[0]}> - ${u[1]} mesaj`)
         .join("\n");
 
-      return interaction.reply("🏆 Top Aktifler:\n" + (top || "Veri yok"));
+      return interaction.reply({
+        content: `🏆 Top Aktifler\n\n${top || "Veri yok"}`
+      });
     }
 
-    // 📢 DUYURU
+    // ================= ETKİNLİK =================
+    if (interaction.commandName === "etkinlik") {
+
+      const embed = new EmbedBuilder()
+        .setTitle("🎉 Etkinlik Başladı")
+        .setDescription("Sunucuda etkinlik başladı!")
+        .setColor("Purple");
+
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    // ================= DUYURU =================
     if (interaction.commandName === "duyuru") {
 
-      const msg = interaction.options.getString("mesaj");
+      const mesaj = interaction.options.getString("mesaj");
 
       const embed = new EmbedBuilder()
         .setTitle("📢 DUYURU")
-        .setDescription(msg)
+        .setDescription(mesaj)
         .setColor("Red");
 
       interaction.guild.channels.cache.forEach(c => {
-        if (c.isTextBased()) c.send({ embeds: [embed] }).catch(()=>{});
+        if (c.isTextBased()) {
+          c.send({ embeds: [embed] }).catch(()=>{});
+        }
       });
 
-      return interaction.reply({ content: "Duyuru gönderildi", ephemeral: true });
+      return interaction.reply({
+        content: "Duyuru gönderildi",
+        ephemeral: true
+      });
     }
   }
 
-  // ========== BUTTON ==========
+  // ================= BUTTON =================
+
+  // 🎫 TICKET OPEN
   if (interaction.customId === "ticket_open") {
 
     const channel = await interaction.guild.channels.create({
       name: `ticket-${interaction.user.username}`,
       type: ChannelType.GuildText,
+
       permissionOverwrites: [
-        { id: interaction.guild.id, deny: ["ViewChannel"] },
-        { id: interaction.user.id, allow: ["ViewChannel", "SendMessages"] }
+        {
+          id: interaction.guild.id,
+          deny: [PermissionsBitField.Flags.ViewChannel]
+        },
+        {
+          id: interaction.user.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages
+          ]
+        }
       ]
     });
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("claim").setLabel("📌 Claim").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("close").setLabel("❌ Close").setStyle(ButtonStyle.Danger)
+
+      new ButtonBuilder()
+        .setCustomId("claim")
+        .setLabel("📌 Claim")
+        .setStyle(ButtonStyle.Success),
+
+      new ButtonBuilder()
+        .setCustomId("close")
+        .setLabel("❌ Close")
+        .setStyle(ButtonStyle.Danger)
+
     );
 
-    channel.send({ content: "🎫 Ticket açıldı", components: [row] });
+    channel.send({
+      content: "🎫 Ticket oluşturuldu",
+      components: [row]
+    });
 
-    return interaction.reply({ content: "Ticket açıldı", ephemeral: true });
+    return interaction.reply({
+      content: "Ticket açıldı",
+      ephemeral: true
+    });
   }
 
+  // CLAIM
   if (interaction.customId === "claim") {
-    return interaction.reply(`📌 Ticket sahiplenildi <@${interaction.user.id}>`);
+    return interaction.reply({
+      content: `📌 Ticket sahiplenildi: <@${interaction.user.id}>`
+    });
   }
 
+  // CLOSE
   if (interaction.customId === "close") {
-
-    const log = interaction.guild.channels.cache.find(c => c.name === "ticket-log");
-    if (log) log.send(`🎫 Ticket kapandı: ${interaction.channel.name}`);
-
     return interaction.channel.delete();
   }
 
+  // ================= APPLY OPEN =================
   if (interaction.customId === "apply_open") {
 
     const modal = new ModalBuilder()
       .setCustomId("apply_form")
-      .setTitle("🛡 Başvuru");
+      .setTitle("🛡 Yetkili Başvuru");
 
     const age = new TextInputBuilder()
       .setCustomId("age")
@@ -205,7 +234,7 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.showModal(modal);
   }
 
-  // ========== MODAL ==========
+  // ================= MODAL =================
   if (interaction.isModalSubmit()) {
 
     if (interaction.customId === "apply_form") {
@@ -214,30 +243,44 @@ client.on("interactionCreate", async (interaction) => {
       const exp = interaction.fields.getTextInputValue("exp");
 
       const channel = await interaction.guild.channels.create({
-        name: `basvuru-${interaction.user.username}`,
+        name: `başvuru-${interaction.user.username}`,
         type: ChannelType.GuildText
       });
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("accept").setLabel("✔ Kabul").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("deny").setLabel("❌ Red").setStyle(ButtonStyle.Danger)
+
+        new ButtonBuilder()
+          .setCustomId("accept")
+          .setLabel("✔ Kabul")
+          .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+          .setCustomId("deny")
+          .setLabel("❌ Red")
+          .setStyle(ButtonStyle.Danger)
+
       );
 
       channel.send({
-        content: `🛡 Başvuru\nYaş: ${age}\nDeneyim: ${exp}`,
+        content: `🛡 Başvuru\n\nYaş: ${age}\nDeneyim: ${exp}`,
         components: [row]
       });
 
-      return interaction.reply({ content: "Başvuru alındı", ephemeral: true });
+      return interaction.reply({
+        content: "Başvurun gönderildi",
+        ephemeral: true
+      });
     }
   }
 
+  // ACCEPT
   if (interaction.customId === "accept") {
-    return interaction.reply("✔ Kabul edildi");
+    return interaction.reply("✔ Başvuru kabul edildi");
   }
 
+  // DENY
   if (interaction.customId === "deny") {
-    return interaction.reply("❌ Reddedildi");
+    return interaction.reply("❌ Başvuru reddedildi");
   }
 
 });
