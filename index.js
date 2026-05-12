@@ -25,10 +25,7 @@ const client = new Client({
   ]
 });
 
-// ================== AKTİFLİK ==================
-let data = {};
-
-// ================== SLASH KOMUT ==================
+// ================= SLASH COMMANDS =================
 const commands = [
   new SlashCommandBuilder()
     .setName("panel")
@@ -41,6 +38,9 @@ const commands = [
 
 const rest = new REST({ version: "10" }).setToken(config.TOKEN);
 
+let data = {};
+
+// ================= READY =================
 client.once("ready", async () => {
   console.log(`${client.user.tag} aktif`);
 
@@ -50,7 +50,7 @@ client.once("ready", async () => {
   );
 });
 
-// ================== MESAJ SAYMA ==================
+// ================= MESSAGE COUNT =================
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
 
@@ -58,7 +58,7 @@ client.on("messageCreate", (message) => {
   data[message.author.id]++;
 });
 
-// ================== INTERACTION ==================
+// ================= INTERACTIONS =================
 client.on("interactionCreate", async (interaction) => {
 
   // ===== SLASH =====
@@ -91,10 +91,10 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ===== BUTTON =====
+  // ===== BUTTONS =====
   if (interaction.isButton()) {
 
-    // TICKET
+    // 🎫 TICKET
     if (interaction.customId === "ticket") {
 
       const channel = await interaction.guild.channels.create({
@@ -107,15 +107,54 @@ client.on("interactionCreate", async (interaction) => {
           },
           {
             id: interaction.user.id,
-            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages
+            ]
           }
         ]
       });
 
-      return interaction.reply({ content: `Ticket açıldı: ${channel}`, ephemeral: true });
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("claim")
+          .setLabel("📌 Claim")
+          .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+          .setCustomId("close")
+          .setLabel("❌ Close")
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      channel.send({
+        content: "Ticket oluşturuldu",
+        components: [row]
+      });
+
+      return interaction.reply({ content: "Ticket açıldı!", ephemeral: true });
     }
 
-    // BAŞVURU
+    // 📌 CLAIM
+    if (interaction.customId === "claim") {
+      return interaction.reply({
+        content: `Ticket sahiplenildi: <@${interaction.user.id}>`
+      });
+    }
+
+    // ❌ CLOSE
+    if (interaction.customId === "close") {
+
+      const log = interaction.guild.channels.cache.find(c => c.name === "ticket-log");
+
+      if (log) {
+        log.send(`Ticket kapatıldı: ${interaction.channel.name}`);
+      }
+
+      return interaction.channel.delete();
+    }
+
+    // 🛡 BAŞVURU
     if (interaction.customId === "apply") {
 
       const modal = new ModalBuilder()
@@ -139,6 +178,16 @@ client.on("interactionCreate", async (interaction) => {
 
       return interaction.showModal(modal);
     }
+
+    // ✔ ACCEPT
+    if (interaction.customId === "accept") {
+      return interaction.reply("Başvuru kabul edildi ✔");
+    }
+
+    // ❌ DENY
+    if (interaction.customId === "deny") {
+      return interaction.reply("Başvuru reddedildi ❌");
+    }
   }
 
   // ===== MODAL =====
@@ -152,6 +201,23 @@ client.on("interactionCreate", async (interaction) => {
       const channel = await interaction.guild.channels.create({
         name: `basvuru-${interaction.user.username}`,
         type: ChannelType.GuildText
+      });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("accept")
+          .setLabel("✔ Kabul")
+          .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+          .setCustomId("deny")
+          .setLabel("❌ Red")
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      channel.send({
+        content: `Başvuru\nYaş: ${age}\nSebep: ${reason}`,
+        components: [row]
       });
 
       return interaction.reply({ content: "Başvurun alındı", ephemeral: true });
