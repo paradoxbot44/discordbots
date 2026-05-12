@@ -15,12 +15,10 @@ const {
   PermissionsBitField
 } = require("discord.js");
 
-// ================= ENV =================
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
-// ================= CLIENT =================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -29,34 +27,30 @@ const client = new Client({
   ]
 });
 
-// ================= DATA =================
 let data = {};
 
 // ================= SLASH COMMANDS =================
 const commands = [
 
-  new SlashCommandBuilder()
-    .setName("panel")
-    .setDescription("📌 Guardix Panel"),
-
-  new SlashCommandBuilder()
-    .setName("ticket")
-    .setDescription("🎫 Ticket Sistemi"),
-
-  new SlashCommandBuilder()
-    .setName("apply")
-    .setDescription("🛡 Yetkili Başvuru"),
-
-  new SlashCommandBuilder()
-    .setName("topaktif")
-    .setDescription("🏆 Aktiflik Sıralama"),
+  new SlashCommandBuilder().setName("panel").setDescription("📌 Panel"),
+  new SlashCommandBuilder().setName("ticket").setDescription("🎫 Ticket sistemi"),
+  new SlashCommandBuilder().setName("apply").setDescription("🛡 Başvuru sistemi"),
 
   new SlashCommandBuilder()
     .setName("duyuru")
     .setDescription("📢 Duyuru yap")
-    .addStringOption(opt =>
-      opt.setName("mesaj")
-        .setDescription("Duyuru mesajı")
+    .addStringOption(o =>
+      o.setName("mesaj")
+        .setDescription("Mesaj")
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("cekilis")
+    .setDescription("🎉 Çekiliş başlat")
+    .addStringOption(o =>
+      o.setName("odul")
+        .setDescription("Ödül")
         .setRequired(true)
     )
 
@@ -67,33 +61,24 @@ client.once("ready", async () => {
 
   console.log(`${client.user.tag} aktif`);
 
-  try {
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-    const rest = new REST({ version: "10" }).setToken(TOKEN);
+  await rest.put(
+    Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+    { body: commands }
+  );
 
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands }
-    );
-
-    console.log("Slash komutlar yüklendi ✔");
-
-  } catch (err) {
-    console.log(err);
-  }
+  console.log("Slash yüklendi ✔");
 });
 
-// ================= ACTIVITY TRACK =================
+// ================= MESSAGE XP =================
 client.on("messageCreate", msg => {
-
   if (msg.author.bot) return;
-
   if (!data[msg.author.id]) data[msg.author.id] = 0;
-
   data[msg.author.id]++;
 });
 
-// ================= INTERACTION =================
+// ================= INTERACTIONS =================
 client.on("interactionCreate", async (interaction) => {
 
   // ================= SLASH =================
@@ -103,80 +88,37 @@ client.on("interactionCreate", async (interaction) => {
     if (interaction.commandName === "panel") {
 
       const row = new ActionRowBuilder().addComponents(
-
-        new ButtonBuilder()
-          .setCustomId("ticket_open")
-          .setLabel("🎫 Ticket")
-          .setStyle(ButtonStyle.Primary),
-
-        new ButtonBuilder()
-          .setCustomId("apply_open")
-          .setLabel("🛡 Başvuru")
-          .setStyle(ButtonStyle.Success)
-
+        new ButtonBuilder().setCustomId("ticket_open").setLabel("🎫 Ticket").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("apply_open").setLabel("🛡 Başvuru").setStyle(ButtonStyle.Success)
       );
 
-      return interaction.reply({
-        content: "📌 Guardix Panel",
-        components: [row]
-      });
+      return interaction.reply({ content: "📌 Guardix Panel", components: [row] });
     }
 
     // TICKET MENU
     if (interaction.commandName === "ticket") {
 
       const embed = new EmbedBuilder()
-        .setTitle("🎫 Guardix Ticket Sistemi")
-        .setDescription("Destek ekibine ulaşmak için ticket aç.")
+        .setTitle("🎫 Guardix Ticket")
         .setColor("Blue")
         .setThumbnail("https://i.imgur.com/your-logo.png")
-        .setFooter({ text: "Guardix Support System" });
+        .setDescription("Destek almak için ticket aç.");
 
       const row = new ActionRowBuilder().addComponents(
-
-        new ButtonBuilder()
-          .setCustomId("ticket_open")
-          .setLabel("🎫 Ticket Aç")
-          .setStyle(ButtonStyle.Primary)
-
+        new ButtonBuilder().setCustomId("ticket_open").setLabel("🎫 Aç").setStyle(ButtonStyle.Primary)
       );
 
-      return interaction.reply({
-        embeds: [embed],
-        components: [row]
-      });
+      return interaction.reply({ embeds: [embed], components: [row] });
     }
 
-    // APPLY PANEL
+    // APPLY MENU
     if (interaction.commandName === "apply") {
 
       const row = new ActionRowBuilder().addComponents(
-
-        new ButtonBuilder()
-          .setCustomId("apply_open")
-          .setLabel("🛡 Başvur")
-          .setStyle(ButtonStyle.Success)
-
+        new ButtonBuilder().setCustomId("apply_open").setLabel("🛡 Başvur").setStyle(ButtonStyle.Success)
       );
 
-      return interaction.reply({
-        content: "🛡 Guardix Yetkili Başvuru",
-        components: [row]
-      });
-    }
-
-    // LEADERBOARD
-    if (interaction.commandName === "topaktif") {
-
-      const top = Object.entries(data)
-        .sort((a,b)=>b[1]-a[1])
-        .slice(0,10)
-        .map((u,i)=>`${i+1}. <@${u[0]}> - ${u[1]} mesaj`)
-        .join("\n");
-
-      return interaction.reply({
-        content: `🏆 Aktiflik\n\n${top || "Veri yok"}`
-      });
+      return interaction.reply({ content: "Yetkili başvuru sistemi", components: [row] });
     }
 
     // DUYURU
@@ -184,22 +126,35 @@ client.on("interactionCreate", async (interaction) => {
 
       const msg = interaction.options.getString("mesaj");
 
+      const channel = interaction.guild.channels.cache.find(c => c.name === "duyuru");
+
       const embed = new EmbedBuilder()
         .setTitle("📢 DUYURU")
         .setDescription(msg)
         .setColor("Red");
 
-      interaction.guild.channels.cache.forEach(c => {
-        if (c.isTextBased()) c.send({ embeds: [embed] }).catch(()=>{});
-      });
+      if (channel) {
+        channel.send({ content: "@everyone", embeds: [embed] });
+      }
 
       return interaction.reply({ content: "Duyuru gönderildi ✔", ephemeral: true });
     }
+
+    // ÇEKİLİŞ
+    if (interaction.commandName === "cekilis") {
+
+      const odul = interaction.options.getString("odul");
+
+      const embed = new EmbedBuilder()
+        .setTitle("🎉 ÇEKİLİŞ")
+        .setDescription(`Ödül: ${odul}\nKatılmak için 🎉 tıkla`)
+        .setColor("Gold");
+
+      return interaction.reply({ embeds: [embed] });
+    }
   }
 
-  // ================= BUTTONS =================
-
-  // TICKET OPEN
+  // ================= TICKET =================
   if (interaction.customId === "ticket_open") {
 
     const channel = await interaction.guild.channels.create({
@@ -207,64 +162,33 @@ client.on("interactionCreate", async (interaction) => {
       type: ChannelType.GuildText,
       permissionOverwrites: [
         { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+        { id: interaction.guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] }
       ]
     });
 
-    const row = new ActionRowBuilder().addComponents(
-
-      new ButtonBuilder()
-        .setCustomId("claim")
-        .setLabel("📌 Claim")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
-        .setCustomId("close")
-        .setLabel("❌ Close")
-        .setStyle(ButtonStyle.Danger)
-
-    );
-
     const embed = new EmbedBuilder()
-      .setTitle("🎫 Guardix Ticket")
+      .setTitle("🎫 Ticket")
+      .setDescription("Staff ekibi yakında ilgilenecek")
       .setColor("Blue")
-      .setThumbnail("https://i.imgur.com/your-logo.png")
-      .setDescription("Destek ekibi yakında ilgilenecek.");
+      .setThumbnail("https://i.imgur.com/your-logo.png");
 
-    channel.send({
-      embeds: [embed],
-      components: [row]
-    });
+    channel.send({ embeds: [embed] });
 
     return interaction.reply({ content: "Ticket açıldı ✔", ephemeral: true });
   }
 
-  // APPLY OPEN (MODAL)
+  // ================= APPLY MODAL =================
   if (interaction.customId === "apply_open") {
 
     const modal = new ModalBuilder()
       .setCustomId("apply_form")
       .setTitle("🛡 Guardix Başvuru");
 
-    const q1 = new TextInputBuilder()
-      .setCustomId("age")
-      .setLabel("Yaş")
-      .setStyle(TextInputStyle.Short);
-
-    const q2 = new TextInputBuilder()
-      .setCustomId("exp")
-      .setLabel("Deneyim")
-      .setStyle(TextInputStyle.Paragraph);
-
-    const q3 = new TextInputBuilder()
-      .setCustomId("reason")
-      .setLabel("Neden yetkili olmak istiyorsun?")
-      .setStyle(TextInputStyle.Paragraph);
-
-    const q4 = new TextInputBuilder()
-      .setCustomId("active")
-      .setLabel("Günlük aktiflik süren?")
-      .setStyle(TextInputStyle.Short);
+    const q1 = new TextInputBuilder().setCustomId("age").setLabel("Yaş").setStyle(TextInputStyle.Short);
+    const q2 = new TextInputBuilder().setCustomId("exp").setLabel("Deneyim").setStyle(TextInputStyle.Paragraph);
+    const q3 = new TextInputBuilder().setCustomId("reason").setLabel("Neden yetkili?").setStyle(TextInputStyle.Paragraph);
+    const q4 = new TextInputBuilder().setCustomId("active").setLabel("Günlük aktiflik").setStyle(TextInputStyle.Short);
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(q1),
@@ -276,74 +200,51 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.showModal(modal);
   }
 
-  // ================= MODAL =================
+  // ================= APPLY RESULT CHANNEL =================
   if (interaction.isModalSubmit()) {
 
-    if (interaction.customId === "apply_form") {
+    const channel = interaction.guild.channels.cache.find(c => c.name === "basvuru-onay");
 
-      const age = interaction.fields.getTextInputValue("age");
-      const exp = interaction.fields.getTextInputValue("exp");
-      const reason = interaction.fields.getTextInputValue("reason");
-      const active = interaction.fields.getTextInputValue("active");
+    const age = interaction.fields.getTextInputValue("age");
+    const exp = interaction.fields.getTextInputValue("exp");
+    const reason = interaction.fields.getTextInputValue("reason");
+    const active = interaction.fields.getTextInputValue("active");
 
-      const channel = await interaction.guild.channels.create({
-        name: `başvuru-${interaction.user.username}`,
-        type: ChannelType.GuildText
-      });
+    const embed = new EmbedBuilder()
+      .setTitle("🛡 Yeni Başvuru")
+      .setDescription(`<@${interaction.user.id}>`)
+      .addFields(
+        { name: "Yaş", value: age },
+        { name: "Deneyim", value: exp },
+        { name: "Sebep", value: reason },
+        { name: "Aktiflik", value: active }
+      )
+      .setColor("Blue");
 
-      const row = new ActionRowBuilder().addComponents(
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("accept").setLabel("✔ Kabul").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("deny").setLabel("❌ Red").setStyle(ButtonStyle.Danger)
+    );
 
-        new ButtonBuilder()
-          .setCustomId("accept")
-          .setLabel("✔ Kabul")
-          .setStyle(ButtonStyle.Success),
-
-        new ButtonBuilder()
-          .setCustomId("deny")
-          .setLabel("❌ Red")
-          .setStyle(ButtonStyle.Danger)
-
-      );
-
-      const embed = new EmbedBuilder()
-        .setTitle("🛡 Guardix Başvuru")
-        .setColor("Blue")
-        .setThumbnail("https://i.imgur.com/your-logo.png")
-        .addFields(
-          { name: "Kullanıcı", value: `<@${interaction.user.id}>` },
-          { name: "Yaş", value: age },
-          { name: "Deneyim", value: exp },
-          { name: "Sebep", value: reason },
-          { name: "Aktiflik", value: active }
-        );
-
-      channel.send({
-        embeds: [embed],
-        components: [row]
-      });
-
-      return interaction.reply({
-        content: "Başvurun alındı ✔",
-        ephemeral: true
-      });
+    if (channel) {
+      channel.send({ embeds: [embed], components: [row] });
     }
+
+    return interaction.reply({ content: "Başvurun gönderildi ✔", ephemeral: true });
   }
 
-  // ACCEPT / DENY
+  // ================= ACCEPT / DENY =================
   if (interaction.customId === "accept") {
-    return interaction.reply("✔ Kabul edildi");
+
+    await interaction.reply("✔ Başvuru kabul edildi");
+
+    await interaction.channel.send("🎉 Başvurunuz onaylandı <@" + interaction.message.content + ">");
+
   }
 
   if (interaction.customId === "deny") {
-    return interaction.reply("❌ Reddedildi");
-  }
 
-  if (interaction.customId === "claim") {
-    return interaction.reply(`📌 Claim: <@${interaction.user.id}>`);
-  }
-
-  if (interaction.customId === "close") {
-    return interaction.channel.delete();
+    return interaction.reply("❌ Başvuru reddedildi");
   }
 
 });
