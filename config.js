@@ -1,5 +1,5 @@
 module.exports = {
-  TOKEN: "MTUwMjk4NjExNjg3MjI3ODAzNg.G6gG8_.opu_pwpHrC2xgwT0MAq6YjgmHVAA3W15P-r8Zk",
-  CLIENT_ID: "1502986116872278036",
-  GUILD_ID: "1502984780696912012"
+  TOKEN: process.env.TOKEN,
+  CLIENT_ID: process.env.CLIENT_ID,
+  GUILD_ID: process.env.GUILD_ID
 };
