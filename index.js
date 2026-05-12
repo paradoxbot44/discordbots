@@ -1,4 +1,4 @@
-const {
+console.log("BOT BAŞLADI");const {
   Client,
   GatewayIntentBits,
   Collection,
