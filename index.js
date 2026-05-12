@@ -21,25 +21,33 @@ const client = new Client({
 const commands = [
   new SlashCommandBuilder()
     .setName('panel')
-    .setDescription('Ticket ve başvuru panelini açar')
+    .setDescription('Ticket & Başvuru panelini açar')
     .toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-/* ================= READY ================= */
+/* ================= READY + REGISTER ================= */
 client.once('ready', async () => {
-  console.log(`${client.user.tag} aktif!`);
+  console.log("================================");
+  console.log("BOT ONLINE:", client.user.tag);
+  console.log("CLIENT_ID:", process.env.CLIENT_ID);
+  console.log("GUILD_ID:", process.env.GUILD_ID);
+  console.log("================================");
 
   try {
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
+    const data = await rest.put(
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
       { body: commands }
     );
 
-    console.log('Slash komut başarıyla yüklendi!');
+    console.log("SLASH REGISTER SUCCESS ✔");
+    console.log("COMMANDS:", data);
   } catch (err) {
-    console.log('Slash register hata:', err);
+    console.log("SLASH REGISTER ERROR ❌", err);
   }
 });
 
@@ -53,19 +61,19 @@ client.on('interactionCreate', async (interaction) => {
       if (interaction.commandName === 'panel') {
 
         const embed = new EmbedBuilder()
-          .setTitle('📌 DESTEK PANELİ')
-          .setDescription('Aşağıdan seçim yapabilirsiniz.')
+          .setTitle("📌 DESTEK PANELİ")
+          .setDescription("Aşağıdan işlem seçiniz:")
           .setColor(0x00AEFF);
 
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-            .setCustomId('ticket')
-            .setLabel('🎟️ Ticket Aç')
+            .setCustomId("ticket")
+            .setLabel("🎟️ Ticket Aç")
             .setStyle(ButtonStyle.Success),
 
           new ButtonBuilder()
-            .setCustomId('basvuru')
-            .setLabel('👮 Yetkili Başvuru')
+            .setCustomId("basvuru")
+            .setLabel("👮 Yetkili Başvuru")
             .setStyle(ButtonStyle.Primary)
         );
 
@@ -76,11 +84,11 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    /* ===== BUTTON ===== */
+    /* ===== BUTTONS ===== */
     if (interaction.isButton()) {
 
       /* TICKET */
-      if (interaction.customId === 'ticket') {
+      if (interaction.customId === "ticket") {
 
         const channel = await interaction.guild.channels.create({
           name: `ticket-${interaction.user.username}`,
@@ -107,16 +115,17 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       /* BAŞVURU */
-      if (interaction.customId === 'basvuru') {
+      if (interaction.customId === "basvuru") {
+
         return interaction.reply({
-          content: '👮 Yetkili başvurusu alındı. Yakında form sistemi eklenecek.',
+          content: "👮 Başvuru alındı. (Form sistemi yakında eklenecek)",
           ephemeral: true
         });
       }
     }
 
   } catch (err) {
-    console.log(err);
+    console.log("INTERACTION ERROR ❌", err);
   }
 });
 
