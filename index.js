@@ -22,12 +22,12 @@ const client = new Client({
 /* ================= COMMANDS ================= */
 const commands = [
   new SlashCommandBuilder()
-    .setName('ticketpanel')
-    .setDescription('🎟️ Ticket sistemini açar'),
+    .setName('ticket')
+    .setDescription('🎟️ Ticket panelini açar'),
 
   new SlashCommandBuilder()
     .setName('basvuru')
-    .setDescription('👮 Yetkili başvuru formunu açar')
+    .setDescription('👮 Yetkili başvuru formu')
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -38,7 +38,10 @@ client.once('ready', async () => {
 
   try {
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
       { body: commands }
     );
 
@@ -57,11 +60,11 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
 
       /* ===== TICKET PANEL ===== */
-      if (interaction.commandName === 'ticketpanel') {
+      if (interaction.commandName === 'ticket') {
 
         const embed = new EmbedBuilder()
           .setTitle("🎟️ TICKET SİSTEMİ")
-          .setDescription("Aşağıdan ticket açabilirsiniz.")
+          .setDescription("Ticket açmak için butona bas.")
           .setColor(0x00AEFF);
 
         const row = new ActionRowBuilder().addComponents(
@@ -77,33 +80,33 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      /* ===== BAŞVURU FORM ===== */
+      /* ===== BAŞVURU ===== */
       if (interaction.commandName === 'basvuru') {
 
         const modal = new ModalBuilder()
-          .setCustomId("basvuru_modal")
-          .setTitle("👮 Yetkili Başvuru Formu");
+          .setCustomId("basvuru_form")
+          .setTitle("👮 Yetkili Başvuru");
 
         const isim = new TextInputBuilder()
           .setCustomId("isim")
-          .setLabel("İsminiz")
+          .setLabel("İsmin")
           .setStyle(TextInputStyle.Short);
 
         const yas = new TextInputBuilder()
           .setCustomId("yas")
-          .setLabel("Yaşınız")
+          .setLabel("Yaşın")
           .setStyle(TextInputStyle.Short);
 
         const deneyim = new TextInputBuilder()
           .setCustomId("deneyim")
-          .setLabel("Deneyiminiz")
+          .setLabel("Deneyim")
           .setStyle(TextInputStyle.Paragraph);
 
-        const row1 = new ActionRowBuilder().addComponents(isim);
-        const row2 = new ActionRowBuilder().addComponents(yas);
-        const row3 = new ActionRowBuilder().addComponents(deneyim);
-
-        modal.addComponents(row1, row2, row3);
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(isim),
+          new ActionRowBuilder().addComponents(yas),
+          new ActionRowBuilder().addComponents(deneyim)
+        );
 
         return interaction.showModal(modal);
       }
@@ -139,10 +142,10 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    /* ===== MODAL SUBMIT ===== */
+    /* ===== MODAL ===== */
     if (interaction.isModalSubmit()) {
 
-      if (interaction.customId === "basvuru_modal") {
+      if (interaction.customId === "basvuru_form") {
 
         const isim = interaction.fields.getTextInputValue("isim");
         const yas = interaction.fields.getTextInputValue("yas");
@@ -150,7 +153,7 @@ client.on('interactionCreate', async (interaction) => {
 
         return interaction.reply({
           content:
-`👮 BAŞVURU ALINDI!
+`👮 BAŞVURU ALINDI
 
 İsim: ${isim}
 Yaş: ${yas}
