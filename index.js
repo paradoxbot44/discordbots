@@ -1,28 +1,13 @@
-const express = require('express');
-const app = express();
-
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
-// BOT CLIENT
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// WEB SERVER (Railway 7/24 için)
-app.get('/', (req, res) => {
-  res.send('Bot 7/24 Aktif!');
-});
-
-app.listen(process.env.PORT || 3000, () => {
-  console.log('Web sunucusu hazır.');
-});
-
-// BOT READY
 client.once('ready', () => {
   console.log(`${client.user.tag} aktif!`);
 });
 
-// SLASH COMMAND SYSTEM
 client.on('interactionCreate', async (interaction) => {
   try {
     if (!interaction.isChatInputCommand()) return;
@@ -43,7 +28,7 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription('Sunucu şu an bakımda veya kapalı.')
         .addFields(
           { name: 'Sebep', value: sebep, inline: true },
-          { name: 'Tahmini Açılış', value: sure, inline: true }
+          { name: 'Süre', value: sure, inline: true }
         )
         .setTimestamp();
 
@@ -55,5 +40,4 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// BOT LOGIN
 client.login(process.env.TOKEN);
