@@ -1,51 +1,72 @@
 const {
   Client,
   GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  PermissionsBitField,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle
+  PermissionsBitField
 } = require('discord.js');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* ================= BOT READY ================= */
-client.once('ready', () => {
+/* ================= SLASH COMMANDS ================= */
+const commands = [
+  new SlashCommandBuilder()
+    .setName('panel')
+    .setDescription('Ticket panelini açar')
+    .toJSON()
+];
+
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
+/* ================= BOT READY + REGISTER ================= */
+client.once('ready', async () => {
   console.log(`${client.user.tag} aktif!`);
+
+  try {
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+
+    console.log('Slash komutlar yüklendi!');
+  } catch (err) {
+    console.log('Slash hata:', err);
+  }
 });
 
 /* ================= INTERACTIONS ================= */
 client.on('interactionCreate', async (interaction) => {
   try {
 
-    /* ================= PANEL KOMUTU ================= */
+    /* ===== SLASH COMMAND ===== */
     if (interaction.isChatInputCommand()) {
 
       if (interaction.commandName === 'panel') {
 
+        const embed = new EmbedBuilder()
+          .setTitle('📌 DESTEK PANELİ')
+          .setDescription('Aşağıdan seçim yap:')
+          .setColor(0x2b2d31);
+
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-            .setCustomId('ticket_open')
+            .setCustomId('ticket')
             .setLabel('🎟️ Ticket Aç')
             .setStyle(ButtonStyle.Success),
 
           new ButtonBuilder()
-            .setCustomId('apply_open')
+            .setCustomId('basvuru')
             .setLabel('👮 Yetkili Başvuru')
             .setStyle(ButtonStyle.Primary)
         );
-
-        const embed = new EmbedBuilder()
-          .setTitle('📌 DESTEK PANELİ')
-          .setDescription('Aşağıdan işlem seçebilirsin.')
-          .setColor(0x2b2d31);
 
         return interaction.reply({
           embeds: [embed],
@@ -54,11 +75,11 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    /* ================= BUTTONS ================= */
+    /* ===== BUTTONS ===== */
     if (interaction.isButton()) {
 
       /* ===== TICKET ===== */
-      if (interaction.customId === 'ticket_open') {
+      if (interaction.customId === 'ticket') {
 
         const channel = await interaction.guild.channels.create({
           name: `ticket-${interaction.user.username}`,
@@ -78,67 +99,16 @@ client.on('interactionCreate', async (interaction) => {
           ]
         });
 
-        await channel.send(`🎟️ ${interaction.user} Ticket açtı. Yetkililer gelecek.`);
-
         return interaction.reply({
-          content: `Ticket açıldı: ${channel}`,
+          content: `🎟️ Ticket açıldı: ${channel}`,
           ephemeral: true
         });
       }
 
-      /* ===== YETKİLİ BAŞVURU FORMU ===== */
-      if (interaction.customId === 'apply_open') {
-
-        const modal = new ModalBuilder()
-          .setCustomId('apply_form')
-          .setTitle('👮 Yetkili Başvuru');
-
-        const age = new TextInputBuilder()
-          .setCustomId('age')
-          .setLabel('Yaşın?')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true);
-
-        const reason = new TextInputBuilder()
-          .setCustomId('reason')
-          .setLabel('Neden yetkili olmak istiyorsun?')
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(true);
-
-        const row1 = new ActionRowBuilder().addComponents(age);
-        const row2 = new ActionRowBuilder().addComponents(reason);
-
-        modal.addComponents(row1, row2);
-
-        return interaction.showModal(modal);
-      }
-    }
-
-    /* ================= FORM SUBMIT ================= */
-    if (interaction.isModalSubmit()) {
-
-      if (interaction.customId === 'apply_form') {
-
-        const age = interaction.fields.getTextInputValue('age');
-        const reason = interaction.fields.getTextInputValue('reason');
-
-        const logChannel = interaction.guild.channels.cache.find(c => c.name === 'log');
-
-        if (logChannel) {
-          const embed = new EmbedBuilder()
-            .setTitle('👮 YENİ BAŞVURU')
-            .addFields(
-              { name: 'Kullanıcı', value: `${interaction.user}` },
-              { name: 'Yaş', value: age },
-              { name: 'Sebep', value: reason }
-            )
-            .setColor(0x00ff99);
-
-          logChannel.send({ embeds: [embed] });
-        }
-
+      /* ===== YETKİLİ BAŞVURU ===== */
+      if (interaction.customId === 'basvuru') {
         return interaction.reply({
-          content: 'Başvurun alındı! Yetkililer inceleyecek.',
+          content: '👮 Başvuru sistemi aktif. Yakında form sistemi eklenecek.',
           ephemeral: true
         });
       }
