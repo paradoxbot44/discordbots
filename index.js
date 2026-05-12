@@ -1,6 +1,9 @@
 const {
   Client,
   GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -8,11 +11,8 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  PermissionsBitField,
   ChannelType,
-  SlashCommandBuilder,
-  REST,
-  Routes
+  PermissionsBitField
 } = require("discord.js");
 
 const config = require("./config");
@@ -25,95 +25,96 @@ const client = new Client({
   ]
 });
 
-// ================== DATA ==================
+// ================= DATA =================
 let data = {};
 
-// ================== SLASH COMMANDS ==================
+// ================= SLASH COMMANDS =================
 const commands = [
-  { name: "panel", description: "📌 Ana panel" },
-  { name: "ticket", description: "🎫 Ticket sistemi" },
-  { name: "apply", description: "🛡 Başvuru sistemi" },
-  { name: "topaktif", description: "🏆 En aktifler" },
-  {
-    name: "duyuru",
-    description: "📢 Duyuru yap",
-    options: [{
-      name: "mesaj",
-      type: 3,
-      description: "Duyuru mesajı",
-      required: true
-    }]
-  }
-];
+  new SlashCommandBuilder().setName("panel").setDescription("📌 Panel"),
+  new SlashCommandBuilder().setName("ticket").setDescription("🎫 Ticket"),
+  new SlashCommandBuilder().setName("apply").setDescription("🛡 Başvuru"),
+  new SlashCommandBuilder().setName("topaktif").setDescription("🏆 Leaderboard"),
+  new SlashCommandBuilder()
+    .setName("duyuru")
+    .setDescription("📢 Duyuru yap")
+    .addStringOption(opt =>
+      opt.setName("mesaj")
+        .setDescription("Duyuru mesajı")
+        .setRequired(true)
+    )
+].map(c => c.toJSON());
 
+// ================= REGISTER =================
 const rest = new REST({ version: "10" }).setToken(config.TOKEN);
 
-// ================== READY ==================
-client.once("ready", async () => {
-  console.log(`${client.user.tag} aktif`);
-
+async function register() {
   try {
+    console.log("Slash register başlıyor...");
+
     await rest.put(
       Routes.applicationGuildCommands(config.CLIENT_ID, config.GUILD_ID),
       { body: commands }
     );
+
+    console.log("Slash register OK ✔");
   } catch (err) {
-    console.log("Slash hata:", err);
+    console.log("Register hata:", err);
   }
+}
+
+// ================= READY =================
+client.once("ready", async () => {
+  console.log(`${client.user.tag} aktif`);
+  await register();
 });
 
-// ================== MESSAGE TRACK ==================
+// ================= MESSAGE TRACK =================
 client.on("messageCreate", (msg) => {
   if (msg.author.bot) return;
+
   if (!data[msg.author.id]) data[msg.author.id] = 0;
   data[msg.author.id]++;
 });
 
-// ================== INTERACTIONS ==================
+// ================= INTERACTIONS =================
 client.on("interactionCreate", async (interaction) => {
 
-  // ================= SLASH =================
+  // ========== SLASH ==========
   if (interaction.isChatInputCommand()) {
 
     // 📌 PANEL
     if (interaction.commandName === "panel") {
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("t_open").setLabel("🎫 Ticket").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("a_open").setLabel("🛡 Başvuru").setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId("ticket_open").setLabel("🎫 Ticket").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("apply_open").setLabel("🛡 Başvuru").setStyle(ButtonStyle.Success)
       );
 
       return interaction.reply({ content: "📌 Panel", components: [row] });
     }
 
-    // 🎫 TICKET COMMAND
+    // 🎫 TICKET
     if (interaction.commandName === "ticket") {
 
       const embed = new EmbedBuilder()
         .setTitle("🎫 Ticket Sistemi")
-        .setDescription("Açmak için butona bas")
         .setColor("Blue");
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("t_open").setLabel("🎫 Aç").setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId("ticket_open").setLabel("Aç").setStyle(ButtonStyle.Primary)
       );
 
       return interaction.reply({ embeds: [embed], components: [row] });
     }
 
-    // 🛡 APPLY COMMAND
+    // 🛡 APPLY
     if (interaction.commandName === "apply") {
 
-      const embed = new EmbedBuilder()
-        .setTitle("🛡 Başvuru Sistemi")
-        .setDescription("Formu doldur")
-        .setColor("Green");
-
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("a_open").setLabel("🛡 Başvur").setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId("apply_open").setLabel("Başvur").setStyle(ButtonStyle.Success)
       );
 
-      return interaction.reply({ embeds: [embed], components: [row] });
+      return interaction.reply({ content: "🛡 Başvuru Panel", components: [row] });
     }
 
     // 🏆 LEADERBOARD
@@ -146,10 +147,8 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ================= BUTTON =================
-
-  // 🎫 TICKET OPEN
-  if (interaction.customId === "t_open") {
+  // ========== BUTTON ==========
+  if (interaction.customId === "ticket_open") {
 
     const channel = await interaction.guild.channels.create({
       name: `ticket-${interaction.user.username}`,
@@ -170,21 +169,19 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.reply({ content: "Ticket açıldı", ephemeral: true });
   }
 
-  // 📌 CLAIM
   if (interaction.customId === "claim") {
-    return interaction.reply(`📌 Ticket sahiplenildi: <@${interaction.user.id}>`);
+    return interaction.reply(`📌 Ticket sahiplenildi <@${interaction.user.id}>`);
   }
 
-  // ❌ CLOSE
   if (interaction.customId === "close") {
+
     const log = interaction.guild.channels.cache.find(c => c.name === "ticket-log");
     if (log) log.send(`🎫 Ticket kapandı: ${interaction.channel.name}`);
 
     return interaction.channel.delete();
   }
 
-  // 🛡 APPLY OPEN
-  if (interaction.customId === "a_open") {
+  if (interaction.customId === "apply_open") {
 
     const modal = new ModalBuilder()
       .setCustomId("apply_form")
@@ -208,7 +205,7 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.showModal(modal);
   }
 
-  // ================= MODAL =================
+  // ========== MODAL ==========
   if (interaction.isModalSubmit()) {
 
     if (interaction.customId === "apply_form") {
@@ -235,7 +232,6 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ================= APPLY ACTIONS =================
   if (interaction.customId === "accept") {
     return interaction.reply("✔ Kabul edildi");
   }
@@ -243,6 +239,7 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId === "deny") {
     return interaction.reply("❌ Reddedildi");
   }
+
 });
 
 client.login(config.TOKEN);
