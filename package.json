@@ -1,19 +1,12 @@
 {
-  "name": "discord-bot",
+  "name": "discordbot",
   "version": "1.0.0",
-  "description": "Pro Discord Bot",
   "main": "index.js",
-
   "scripts": {
-    "start": "node index.js",
-    "register": "node register.js"
+    "start": "node index.js"
   },
-
   "dependencies": {
-    "discord.js": "^14.15.3"
-  },
-
-  "engines": {
-    "node": "22.x"
+    "discord.js": "^14.15.3",
+    "@discordjs/voice": "^0.17.0"
   }
 }
