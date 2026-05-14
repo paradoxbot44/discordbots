@@ -39,20 +39,20 @@ modLog: process.env.MODLOG_CHANNEL,
 resultChannel: process.env.RESULT_CHANNEL
 };
 
-// ================= SAFE CRASH GUARD =================
+// ================= CRASH GUARD =================
 process.on("unhandledRejection", console.log);
 process.on("uncaughtException", console.log);
 
-// ================= SLASH COMMANDS (FIXED V14) =================
+// ================= SLASH COMMANDS (FULL FIXED) =================
 const commands = [
 
 new SlashCommandBuilder()
 .setName("panel")
-.setDescription("📌 Paneli açar"),
+.setDescription("📌 Ana paneli açar"),
 
 new SlashCommandBuilder()
 .setName("ban")
-.setDescription("🔨 Kullanıcı banlar")
+.setDescription("🔨 Kullanıcıyı banlar")
 .addUserOption(option =>
 option
 .setName("user")
@@ -62,7 +62,7 @@ option
 
 new SlashCommandBuilder()
 .setName("kick")
-.setDescription("👢 Kullanıcı kickler")
+.setDescription("👢 Kullanıcıyı kickler")
 .addUserOption(option =>
 option
 .setName("user")
@@ -72,31 +72,43 @@ option
 
 new SlashCommandBuilder()
 .setName("rolver")
-.setDescription("🎭 Rol verir")
+.setDescription("🎭 Kullanıcıya rol verir")
 .addUserOption(option =>
-option.setName("user").setDescription("Kullanıcı").setRequired(true)
+option
+.setName("user")
+.setDescription("Kullanıcı")
+.setRequired(true)
 )
 .addRoleOption(option =>
-option.setName("role").setDescription("Verilecek rol").setRequired(true)
+option
+.setName("role")
+.setDescription("Verilecek rol")
+.setRequired(true)
 )
 
-].map(c => c.toJSON());
+].map(cmd => cmd.toJSON());
 
 // ================= READY =================
 client.once("ready", async () => {
-console.log(`🟢 BOT ONLINE: ${client.user.tag}`);
+console.log(`🟢 MEGA CORE v5 ONLINE: ${client.user.tag}`);
 
 const rest = new REST({ version: "10" }).setToken(config.token);
 
+try {
 await rest.put(
 Routes.applicationCommands(config.clientId),
 { body: commands }
 );
+console.log("Slash commands yüklendi");
+} catch (err) {
+console.log("Slash error:", err);
+}
 
-// VOICE JOIN
-const vc = await client.channels.fetch(config.voiceChannel).catch(()=>null);
+// VOICE JOIN SAFE
+try {
+const vc = await client.channels.fetch(config.voiceChannel);
 
-if(vc){
+if (vc) {
 joinVoiceChannel({
 channelId: vc.id,
 guildId: vc.guild.id,
@@ -104,19 +116,22 @@ adapterCreator: vc.guild.voiceAdapterCreator,
 selfDeaf: false
 });
 }
+} catch (e) {
+console.log("Voice error:", e);
+}
 });
 
 // ================= INTERACTIONS =================
 client.on("interactionCreate", async interaction => {
 
 // ================= PANEL =================
-if(interaction.isChatInputCommand() && interaction.commandName === "panel"){
+if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
 
 return interaction.reply({
 embeds: [
 new EmbedBuilder()
 .setColor("Blue")
-.setTitle("🛡 MEGA CORE PANEL")
+.setTitle("🛡 MEGA CORE v5 PANEL")
 .setDescription("Ticket + Apply + Moderation System")
 ],
 components: [
@@ -125,33 +140,36 @@ new StringSelectMenuBuilder()
 .setCustomId("ticket_menu")
 .setPlaceholder("🎫 Ticket seç")
 .addOptions(
-{ label:"Support", value:"support" },
-{ label:"Bot Help", value:"bot" },
-{ label:"Other", value:"other" }
+{ label: "Support", value: "support" },
+{ label: "Bot Help", value: "bot" },
+{ label: "Other", value: "other" }
 )
 ),
 new ActionRowBuilder().addComponents(
-new ButtonBuilder().setCustomId("apply").setLabel("🧾 Apply").setStyle(ButtonStyle.Success)
+new ButtonBuilder()
+.setCustomId("apply")
+.setLabel("🧾 Apply")
+.setStyle(ButtonStyle.Success)
 )
 ]
 });
 }
 
 // ================= TICKET =================
-if(interaction.isStringSelectMenu() && interaction.customId === "ticket_menu"){
+if (interaction.isStringSelectMenu() && interaction.customId === "ticket_menu") {
 
-const ch = await interaction.guild.channels.create({
-name:`ticket-${interaction.user.username}`,
-type:ChannelType.GuildText,
-parent:config.ticketCategory,
-permissionOverwrites:[
-{ id:interaction.guild.id, deny:[PermissionsBitField.Flags.ViewChannel] },
-{ id:interaction.user.id, allow:[PermissionsBitField.Flags.ViewChannel,PermissionsBitField.Flags.SendMessages] },
-{ id:config.staffRole, allow:[PermissionsBitField.Flags.ViewChannel,PermissionsBitField.Flags.SendMessages] }
+const channel = await interaction.guild.channels.create({
+name: `ticket-${interaction.user.username}`,
+type: ChannelType.GuildText,
+parent: config.ticketCategory,
+permissionOverwrites: [
+{ id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+{ id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+{ id: config.staffRole, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
 ]
 });
 
-ch.ownerId = interaction.user.id;
+channel.ownerId = interaction.user.id;
 
 const row = new ActionRowBuilder().addComponents(
 new ButtonBuilder()
@@ -160,32 +178,35 @@ new ButtonBuilder()
 .setStyle(ButtonStyle.Danger)
 );
 
-ch.send({
-embeds:[new EmbedBuilder().setColor("Green").setTitle("🎫 Ticket Açıldı")],
-components:[row]
+channel.send({
+embeds: [
+new EmbedBuilder()
+.setColor("Green")
+.setTitle("🎫 Ticket Açıldı")
+.setDescription("Destek ekibi yakında ilgilenecek")
+],
+components: [row]
 });
 
-return interaction.reply({content:"Ticket açıldı",ephemeral:true});
+return interaction.reply({ content: "Ticket açıldı", ephemeral: true });
 }
 
 // ================= CLOSE TICKET =================
-if(interaction.isButton() && interaction.customId === "close_ticket"){
+if (interaction.isButton() && interaction.customId === "close_ticket") {
 
-const user = await client.users.fetch(interaction.channel.ownerId).catch(()=>null);
+const user = await client.users.fetch(interaction.channel.ownerId).catch(() => null);
 
-if(user){
-user.send("🎫 Ticket kapatıldı.");
-}
+if (user) user.send("🎫 Ticket kapatıldı.");
 
 await interaction.channel.delete();
 }
 
-// ================= APPLY MODAL =================
-if(interaction.isButton() && interaction.customId === "apply"){
+// ================= APPLY =================
+if (interaction.isButton() && interaction.customId === "apply") {
 
 const modal = new ModalBuilder()
 .setCustomId("apply_modal")
-.setTitle("🧾 Apply Form");
+.setTitle("🧾 Başvuru Formu");
 
 modal.addComponents(
 new ActionRowBuilder().addComponents(
@@ -208,90 +229,95 @@ return interaction.showModal(modal);
 }
 
 // ================= APPLY SUBMIT =================
-if(interaction.isModalSubmit() && interaction.customId === "apply_modal"){
+if (interaction.isModalSubmit() && interaction.customId === "apply_modal") {
 
 const log = client.channels.cache.get(config.modLog);
-if(!log) return interaction.reply({content:"Modlog yok",ephemeral:true});
+
+if (!log) {
+return interaction.reply({ content: "Modlog bulunamadı", ephemeral: true });
+}
 
 const embed = new EmbedBuilder()
 .setColor("Orange")
-.setTitle("🧾 New Application")
-.setDescription(`User: ${interaction.user.tag}`);
+.setTitle("🧾 Yeni Başvuru")
+.setDescription(`Kullanıcı: ${interaction.user.tag}`);
 
 const row = new ActionRowBuilder().addComponents(
-new ButtonBuilder().setCustomId(`approve_${interaction.user.id}`).setLabel("Approve").setStyle(ButtonStyle.Success),
-new ButtonBuilder().setCustomId(`reject_${interaction.user.id}`).setLabel("Reject").setStyle(ButtonStyle.Danger)
+new ButtonBuilder().setCustomId(`approve_${interaction.user.id}`).setLabel("Onayla").setStyle(ButtonStyle.Success),
+new ButtonBuilder().setCustomId(`reject_${interaction.user.id}`).setLabel("Reddet").setStyle(ButtonStyle.Danger)
 );
 
-await log.send({embeds:[embed],components:[row]});
+await log.send({ embeds: [embed], components: [row] });
 
-return interaction.reply({content:"Gönderildi",ephemeral:true});
+return interaction.reply({ content: "Başvuru gönderildi", ephemeral: true });
 }
 
 // ================= APPROVE =================
-if(interaction.isButton() && interaction.customId.startsWith("approve_")){
+if (interaction.isButton() && interaction.customId.startsWith("approve_")) {
 
 const id = interaction.customId.split("_")[1];
 
 const result = client.channels.cache.get(config.resultChannel);
-if(result){
+
+if (result) {
 result.send(`✅ <@${id}> Başvurunuz ONAYLANDI`);
 }
 
-return interaction.reply({content:"OK",ephemeral:true});
+return interaction.reply({ content: "Onaylandı", ephemeral: true });
 }
 
 // ================= REJECT =================
-if(interaction.isButton() && interaction.customId.startsWith("reject_")){
+if (interaction.isButton() && interaction.customId.startsWith("reject_")) {
 
 const id = interaction.customId.split("_")[1];
 
 const result = client.channels.cache.get(config.resultChannel);
-if(result){
+
+if (result) {
 result.send(`❌ <@${id}> Başvurunuz REDDEDİLDİ`);
 }
 
-return interaction.reply({content:"OK",ephemeral:true});
+return interaction.reply({ content: "Reddedildi", ephemeral: true });
 }
 
 // ================= BAN =================
-if(interaction.isChatInputCommand() && interaction.commandName === "ban"){
+if (interaction.isChatInputCommand() && interaction.commandName === "ban") {
 
-if(!interaction.member.roles.cache.has(config.staffRole))
-return interaction.reply({content:"No permission",ephemeral:true});
+if (!interaction.member.roles.cache.has(config.staffRole))
+return interaction.reply({ content: "Yetkin yok", ephemeral: true });
 
 const user = interaction.options.getUser("user");
 
 await interaction.guild.members.ban(user.id);
 
-return interaction.reply({content:"Banned"});
+return interaction.reply({ content: "Banlandı", ephemeral: true });
 }
 
 // ================= KICK =================
-if(interaction.isChatInputCommand() && interaction.commandName === "kick"){
+if (interaction.isChatInputCommand() && interaction.commandName === "kick") {
 
-if(!interaction.member.roles.cache.has(config.staffRole))
-return interaction.reply({content:"No permission",ephemeral:true});
+if (!interaction.member.roles.cache.has(config.staffRole))
+return interaction.reply({ content: "Yetkin yok", ephemeral: true });
 
 const user = interaction.options.getUser("user");
 
 await interaction.guild.members.kick(user.id);
 
-return interaction.reply({content:"Kicked"});
+return interaction.reply({ content: "Kicklendi", ephemeral: true });
 }
 
 // ================= ROLVER =================
-if(interaction.isChatInputCommand() && interaction.commandName === "rolver"){
+if (interaction.isChatInputCommand() && interaction.commandName === "rolver") {
 
-if(!interaction.member.roles.cache.has(config.staffRole))
-return interaction.reply({content:"No permission",ephemeral:true});
+if (!interaction.member.roles.cache.has(config.staffRole))
+return interaction.reply({ content: "Yetkin yok", ephemeral: true });
 
 const user = interaction.options.getUser("user");
 const role = interaction.options.getRole("role");
 
 await interaction.guild.members.cache.get(user.id).roles.add(role);
 
-return interaction.reply({content:"Role given"});
+return interaction.reply({ content: "Rol verildi", ephemeral: true });
 }
 
 });
