@@ -243,4 +243,4 @@ client.on("guildMemberAdd", (m) => {
 });
 
 // ================= LOGIN =================
-client.login("TOKEN");
+client.login(process.env.TOKEN);
