@@ -227,7 +227,7 @@ client.on("interactionCreate", async (i) => {
   }
 });
 
-// ================= RAID =================
+// ================= RAID ================
 client.on("guildMemberAdd", (m) => {
   const g = m.guild.id;
   const now = Date.now();
