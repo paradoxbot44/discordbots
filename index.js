@@ -1,6 +1,9 @@
 const {
   Client,
   GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ModalBuilder,
@@ -8,6 +11,7 @@ const {
   TextInputStyle,
   ButtonBuilder,
   ButtonStyle,
+  PermissionsBitField,
   EmbedBuilder
 } = require("discord.js");
 
@@ -20,145 +24,168 @@ const client = new Client({
   ]
 });
 
-// ================= MEMORY =================
+// ================= DATA =================
+const spamMap = new Map();
 const xp = new Map();
 const msgCount = new Map();
-const spam = new Map();
-const raid = new Map();
 
-// ================= HELPERS =================
-function getResultChannel(guild) {
-  return guild.channels.cache.find(c => c.name === "basvuru-sonuc");
-}
+// ================= SLASH COMMANDS =================
+const commands = [
+  new SlashCommandBuilder().setName("panel").setDescription("Paneli aç"),
+  new SlashCommandBuilder().setName("ticket").setDescription("Ticket sistemi"),
+  new SlashCommandBuilder().setName("basvuru").setDescription("Başvuru formu"),
+  new SlashCommandBuilder().setName("aktif").setDescription("En aktif kullanıcı"),
+  new SlashCommandBuilder().setName("top").setDescription("XP sıralama")
+].map(c => c.toJSON());
 
 // ================= READY =================
-client.once("ready", () => {
-  console.log(`🛡️ GUARDIX V4 FINAL ACTIVE: ${client.user.tag}`);
+client.once("ready", async () => {
+  console.log(`🛡️ GUARDIX SLASH ONLINE: ${client.user.tag}`);
 });
 
 // ================= WELCOME =================
-client.on("guildMemberAdd", async (m) => {
-  m.guild.systemChannel?.send(`👋 Hoş geldin ${m}! Guardix V4'e katıldın 🛡️`);
-  m.send("👋 Sunucuya hoş geldin! Guardix aktif 🛡️").catch(() => {});
+client.on("guildMemberAdd", (m) => {
+  const ch = m.guild.channels.cache.find(c => c.name === "karsilama");
+  ch?.send(`👋 Hoş geldin ${m} | Guardix aktif 🛡️`);
 });
 
-// ================= MESSAGE SYSTEM =================
-client.on("messageCreate", async (m) => {
+// ================= MESSAGE + ANTI SPAM =================
+client.on("messageCreate", (m) => {
   if (!m.guild || m.author.bot) return;
 
   const id = m.author.id;
 
-  // XP + MSG COUNT
+  if (!spamMap.has(id)) spamMap.set(id, []);
+
+  const now = Date.now();
+  const arr = spamMap.get(id);
+
+  arr.push(now);
+
+  const recent = arr.filter(t => now - t < 10000);
+  spamMap.set(id, recent);
+
+  if (recent.length >= 10) {
+    m.guild.members.fetch(id).then(member => {
+      if (member.moderatable) {
+        member.timeout(60 * 1000, "Spam").catch(() => {});
+      }
+    });
+
+    m.channel.send(`🚨 ${m.author} spam yasak ❌ (1 dk mute)`);
+  }
+
   xp.set(id, (xp.get(id) || 0) + 1);
   msgCount.set(id, (msgCount.get(id) || 0) + 1);
-
-  // LEVEL SYSTEM
-  if (xp.get(id) % 100 === 0) {
-    m.channel.send(`🏆 LEVEL UP: ${m.author}`);
-  }
-
-  // PANEL
-  if (m.content === "!panel") {
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("menu")
-      .setPlaceholder("Seçim yap")
-      .addOptions([
-        { label: "🎫 Ticket Aç", value: "ticket" },
-        { label: "🧾 Başvuru", value: "apply" }
-      ]);
-
-    return m.channel.send({
-      content: "🛡️ GUARDIX PANEL",
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
-  }
-
-  // EN AKTİF
-  if (m.content === "!aktif") {
-    const top = [...msgCount.entries()].sort((a,b)=>b[1]-a[1])[0];
-    if (top) {
-      return m.channel.send(`🔥 EN AKTİF: <@${top[0]}> (${top[1]} mesaj)`);
-    }
-  }
-
-  // TOP XP
-  if (m.content === "!top") {
-    const top = [...xp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
-    return m.channel.send(top.map(x => `<@${x[0]}> - ${x[1]} XP`).join("\n"));
-  }
-
-  // ================= ANTI-SPAM =================
-  const now = Date.now();
-  if (!spam.has(id)) spam.set(id, []);
-  spam.get(id).push(now);
-
-  const recent = spam.get(id).filter(t => now - t < 4000);
-  if (recent.length > 6) {
-    m.channel.send(`🚨 SPAM ALGILANDI: ${m.author}`);
-  }
 });
 
 // ================= INTERACTIONS =================
 client.on("interactionCreate", async (i) => {
 
-  if (!i.isStringSelectMenu()) return;
+  // ================= SLASH =================
+  if (i.isChatInputCommand()) {
 
-  // ================= TICKET =================
-  if (i.values[0] === "ticket") {
+    // PANEL
+    if (i.commandName === "panel") {
 
-    const ch = await i.guild.channels.create({
-      name: `ticket-${i.user.username}`
-    });
+      const menu = new StringSelectMenuBuilder()
+        .setCustomId("menu")
+        .setPlaceholder("Seç")
+        .addOptions([
+          { label: "🎫 Ticket Aç", value: "ticket" },
+          { label: "🧾 Başvuru", value: "apply" }
+        ]);
 
-    const btn = new ButtonBuilder()
-      .setCustomId("close")
-      .setLabel("Kapat")
-      .setStyle(ButtonStyle.Danger);
+      return i.reply({
+        content: "🛡️ GUARDIX PANEL",
+        components: [new ActionRowBuilder().addComponents(menu)],
+        ephemeral: true
+      });
+    }
 
-    ch.send({
-      content: `🎫 Ticket Açıldı: ${i.user}`,
-      components: [new ActionRowBuilder().addComponents(btn)]
-    });
+    // TICKET
+    if (i.commandName === "ticket") {
+      return i.reply({ content: "Panelden aç: /panel", ephemeral: true });
+    }
 
-    return i.reply({ content: "Ticket açıldı", ephemeral: true });
+    // AKTİF
+    if (i.commandName === "aktif") {
+      const top = [...msgCount.entries()].sort((a,b)=>b[1]-a[1])[0];
+      return i.reply(`🔥 EN AKTİF: <@${top[0]}>`);
+    }
+
+    // TOP
+    if (i.commandName === "top") {
+      const top = [...xp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
+      return i.reply(top.map(x => `<@${x[0]}> - ${x[1]} XP`).join("\n"));
+    }
   }
 
-  // ================= APPLY =================
-  if (i.values[0] === "apply") {
+  // ================= DROPDOWN =================
+  if (i.isStringSelectMenu()) {
 
-    const modal = new ModalBuilder()
-      .setCustomId("form")
-      .setTitle("🧾 BAŞVURU FORMU");
+    if (i.values[0] === "ticket") {
 
-    const q1 = new TextInputBuilder()
-      .setCustomId("age")
-      .setLabel("Yaş")
-      .setStyle(TextInputStyle.Short);
+      const ch = await i.guild.channels.create({
+        name: `ticket-${i.user.username}`,
+        permissionOverwrites: [
+          {
+            id: i.guild.id,
+            deny: [PermissionsBitField.Flags.ViewChannel]
+          },
+          {
+            id: i.user.id,
+            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+          },
+          {
+            id: "STAFF_ROLE_ID",
+            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+          }
+        ]
+      });
 
-    const q2 = new TextInputBuilder()
-      .setCustomId("exp")
-      .setLabel("Tecrübe")
-      .setStyle(TextInputStyle.Paragraph);
+      ch.send(`🎫 Ticket açıldı\n🟡 inceleniyor...\n⏳ bekleyiniz`);
 
-    const q3 = new TextInputBuilder()
-      .setCustomId("why")
-      .setLabel("Neden biz?")
-      .setStyle(TextInputStyle.Paragraph);
+      const btn = new ButtonBuilder()
+        .setCustomId("close")
+        .setLabel("Kapat")
+        .setStyle(ButtonStyle.Danger);
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(q1),
-      new ActionRowBuilder().addComponents(q2),
-      new ActionRowBuilder().addComponents(q3)
-    );
+      ch.send({ components: [new ActionRowBuilder().addComponents(btn)] });
 
-    return i.showModal(modal);
-  }
+      return i.reply({ content: "Ticket açıldı", ephemeral: true });
+    }
 
-  // ================= CLOSE TICKET =================
-  if (i.isButton() && i.customId === "close") {
-    await i.reply({ content: "Ticket kapanıyor...", ephemeral: true });
-    setTimeout(() => i.channel.delete().catch(()=>{}), 1200);
+    // ================= FORM =================
+    if (i.values[0] === "apply") {
+
+      const modal = new ModalBuilder()
+        .setCustomId("form")
+        .setTitle("🧾 BAŞVURU");
+
+      const q1 = new TextInputBuilder()
+        .setCustomId("age")
+        .setLabel("Yaş")
+        .setStyle(TextInputStyle.Short);
+
+      const q2 = new TextInputBuilder()
+        .setCustomId("exp")
+        .setLabel("Tecrübe")
+        .setStyle(TextInputStyle.Paragraph);
+
+      const q3 = new TextInputBuilder()
+        .setCustomId("why")
+        .setLabel("Neden biz?")
+        .setStyle(TextInputStyle.Paragraph);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(q1),
+        new ActionRowBuilder().addComponents(q2),
+        new ActionRowBuilder().addComponents(q3)
+      );
+
+      return i.showModal(modal);
+    }
   }
 
   // ================= FORM SUBMIT =================
@@ -173,13 +200,8 @@ client.on("interactionCreate", async (i) => {
     });
 
     const embed = new EmbedBuilder()
-      .setTitle("🧾 YENİ BAŞVURU")
-      .setDescription(
-`👤 ${i.user}
-🎂 Yaş: ${age}
-🧠 Tecrübe: ${exp}
-❓ Neden: ${why}`
-      );
+      .setTitle("🧾 BAŞVURU")
+      .setDescription(`${i.user}\n${age}\n${exp}\n${why}`);
 
     const ok = new ButtonBuilder()
       .setCustomId(`ok_${i.user.id}`)
@@ -200,47 +222,48 @@ client.on("interactionCreate", async (i) => {
     return i.reply({ content: "Başvuru gönderildi", ephemeral: true });
   }
 
-  // ================= APPROVE =================
+  // ================= CLOSE =================
+  if (i.isButton() && i.customId === "close") {
+
+    try {
+      await i.user.send("🎫 Ticket kapatıldı 🛡️");
+    } catch {}
+
+    await i.reply({ content: "Kapatılıyor...", ephemeral: true });
+
+    setTimeout(() => i.channel.delete().catch(()=>{}), 1200);
+  }
+
+  // ================= ONAY / RED =================
   if (i.isButton() && i.customId.startsWith("ok_")) {
-
     const id = i.customId.split("_")[1];
-    const channel = getResultChannel(i.guild);
-
-    if (channel) {
-      channel.send(`🟢 <@${id}> BAŞVURUNUZ ONAYLANDI 🎉`);
-    }
-
-    return i.reply({ content: "Onaylandı", ephemeral: true });
+    const ch = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
+    ch?.send(`🟢 <@${id}> ONAYLANDI 🎉`);
+    return i.reply({ ephemeral: true, content: "OK" });
   }
 
-  // ================= REJECT =================
   if (i.isButton() && i.customId.startsWith("no_")) {
-
     const id = i.customId.split("_")[1];
-    const channel = getResultChannel(i.guild);
-
-    if (channel) {
-      channel.send(`🔴 <@${id}> BAŞVURUNUZ REDDEDİLDİ ❌`);
-    }
-
-    return i.reply({ content: "Reddedildi", ephemeral: true });
+    const ch = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
+    ch?.send(`🔴 <@${id}> REDDEDİLDİ ❌`);
+    return i.reply({ ephemeral: true, content: "NO" });
   }
 });
 
-// ================= RAID ================
-client.on("guildMemberAdd", (m) => {
-  const g = m.guild.id;
-  const now = Date.now();
+// ================= SLASH REGISTER =================
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
-  if (!raid.has(g)) raid.set(g, []);
-  raid.get(g).push(now);
-
-  const recent = raid.get(g).filter(t => now - t < 10000);
-
-  if (recent.length > 7) {
-    m.guild.systemChannel?.send("🚨 RAID ALGILANDI!");
+(async () => {
+  try {
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+    console.log("Slash commands yüklendi");
+  } catch (e) {
+    console.log(e);
   }
-});
+})();
 
 // ================= LOGIN =================
 client.login(process.env.TOKEN);
