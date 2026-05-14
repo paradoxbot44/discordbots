@@ -36,40 +36,55 @@ voiceChannel: process.env.VOICE_CHANNEL,
 staffRole: process.env.STAFF_ROLE,
 ticketCategory: process.env.TICKET_CATEGORY,
 modLog: process.env.MODLOG_CHANNEL,
-resultChannel: process.env.RESULT_CHANNEL,
-welcomeChannel: process.env.WELCOME_CHANNEL
+resultChannel: process.env.RESULT_CHANNEL
 };
 
-// ================= MEMORY DB =================
-const db = {
-xp: {},
-coins: {},
-afk: {},
-spam: {},
-invites: {}
-};
-
-// ================= SAFE SYSTEM =================
+// ================= SAFE CRASH GUARD =================
 process.on("unhandledRejection", console.log);
 process.on("uncaughtException", console.log);
 
-// ================= SLASH COMMANDS =================
+// ================= SLASH COMMANDS (FIXED V14) =================
 const commands = [
 
-new SlashCommandBuilder().setName("panel").setDescription("📌 Panel"),
+new SlashCommandBuilder()
+.setName("panel")
+.setDescription("📌 Paneli açar"),
 
-new SlashCommandBuilder().setName("ban").setDescription("🔨 Ban").addUserOption(o=>o.setName("user").setRequired(true)),
-new SlashCommandBuilder().setName("kick").setDescription("👢 Kick").addUserOption(o=>o.setName("user").setRequired(true)),
-new SlashCommandBuilder().setName("clear").setDescription("🧹 Clear").addIntegerOption(o=>o.setName("amount").setRequired(true)),
+new SlashCommandBuilder()
+.setName("ban")
+.setDescription("🔨 Kullanıcı banlar")
+.addUserOption(option =>
+option
+.setName("user")
+.setDescription("Banlanacak kullanıcı")
+.setRequired(true)
+),
 
-new SlashCommandBuilder().setName("afk").setDescription("🧠 AFK ON"),
-new SlashCommandBuilder().setName("daily").setDescription("💰 Günlük coin")
+new SlashCommandBuilder()
+.setName("kick")
+.setDescription("👢 Kullanıcı kickler")
+.addUserOption(option =>
+option
+.setName("user")
+.setDescription("Kicklenecek kullanıcı")
+.setRequired(true)
+),
 
-].map(c=>c.toJSON());
+new SlashCommandBuilder()
+.setName("rolver")
+.setDescription("🎭 Rol verir")
+.addUserOption(option =>
+option.setName("user").setDescription("Kullanıcı").setRequired(true)
+)
+.addRoleOption(option =>
+option.setName("role").setDescription("Verilecek rol").setRequired(true)
+)
+
+].map(c => c.toJSON());
 
 // ================= READY =================
 client.once("ready", async () => {
-console.log(`🟢 ULTRA BOT ACTIVE: ${client.user.tag}`);
+console.log(`🟢 BOT ONLINE: ${client.user.tag}`);
 
 const rest = new REST({ version: "10" }).setToken(config.token);
 
@@ -78,173 +93,205 @@ Routes.applicationCommands(config.clientId),
 { body: commands }
 );
 
-// VOICE
-const vc = await client.channels.fetch(config.voiceChannel);
+// VOICE JOIN
+const vc = await client.channels.fetch(config.voiceChannel).catch(()=>null);
+
 if(vc){
 joinVoiceChannel({
 channelId: vc.id,
 guildId: vc.guild.id,
 adapterCreator: vc.guild.voiceAdapterCreator,
-selfDeaf:false
+selfDeaf: false
 });
 }
-});
-
-// ================= MESSAGE SYSTEM =================
-client.on("messageCreate", msg=>{
-
-if(msg.author.bot) return;
-
-// XP
-db.xp[msg.author.id]=(db.xp[msg.author.id]||0)+1;
-
-// COIN
-db.coins[msg.author.id]=(db.coins[msg.author.id]||0)+1;
-
-// AFK CHECK
-if(db.afk[msg.mentions.users.first()?.id]){
-msg.reply("Kullanıcı AFK");
-}
-
-// ANTI SPAM
-db.spam[msg.author.id]=(db.spam[msg.author.id]||0)+1;
-setTimeout(()=>db.spam[msg.author.id]--,5000);
 });
 
 // ================= INTERACTIONS =================
-client.on("interactionCreate", async i=>{
+client.on("interactionCreate", async interaction => {
 
-// ===== PANEL =====
-if(i.isChatInputCommand() && i.commandName==="panel"){
-return i.reply({
-embeds:[new EmbedBuilder().setColor("Blue").setTitle("ULTRA PANEL")],
-components:[
+// ================= PANEL =================
+if(interaction.isChatInputCommand() && interaction.commandName === "panel"){
+
+return interaction.reply({
+embeds: [
+new EmbedBuilder()
+.setColor("Blue")
+.setTitle("🛡 MEGA CORE PANEL")
+.setDescription("Ticket + Apply + Moderation System")
+],
+components: [
 new ActionRowBuilder().addComponents(
 new StringSelectMenuBuilder()
-.setCustomId("ticket")
+.setCustomId("ticket_menu")
+.setPlaceholder("🎫 Ticket seç")
 .addOptions(
-{label:"Support",value:"support"},
-{label:"Bot",value:"bot"},
-{label:"Other",value:"other"}
+{ label:"Support", value:"support" },
+{ label:"Bot Help", value:"bot" },
+{ label:"Other", value:"other" }
 )
 ),
 new ActionRowBuilder().addComponents(
-new ButtonBuilder().setCustomId("apply").setLabel("Apply").setStyle(ButtonStyle.Success),
-new ButtonBuilder().setCustomId("feedback").setLabel("Feedback").setStyle(ButtonStyle.Primary)
+new ButtonBuilder().setCustomId("apply").setLabel("🧾 Apply").setStyle(ButtonStyle.Success)
 )
 ]
 });
 }
 
-// ===== TICKET =====
-if(i.isStringSelectMenu() && i.customId==="ticket"){
-const ch=await i.guild.channels.create({
-name:`ticket-${i.user.username}`,
+// ================= TICKET =================
+if(interaction.isStringSelectMenu() && interaction.customId === "ticket_menu"){
+
+const ch = await interaction.guild.channels.create({
+name:`ticket-${interaction.user.username}`,
 type:ChannelType.GuildText,
 parent:config.ticketCategory,
 permissionOverwrites:[
-{id:i.guild.id,deny:[PermissionsBitField.Flags.ViewChannel]},
-{id:i.user.id,allow:[PermissionsBitField.Flags.ViewChannel,PermissionsBitField.Flags.SendMessages]},
-{id:config.staffRole,allow:[PermissionsBitField.Flags.ViewChannel,PermissionsBitField.Flags.SendMessages]}
+{ id:interaction.guild.id, deny:[PermissionsBitField.Flags.ViewChannel] },
+{ id:interaction.user.id, allow:[PermissionsBitField.Flags.ViewChannel,PermissionsBitField.Flags.SendMessages] },
+{ id:config.staffRole, allow:[PermissionsBitField.Flags.ViewChannel,PermissionsBitField.Flags.SendMessages] }
 ]
 });
 
-ch.ownerId=i.user.id;
+ch.ownerId = interaction.user.id;
 
-const row=new ActionRowBuilder().addComponents(
-new ButtonBuilder().setCustomId("close").setLabel("Close").setStyle(ButtonStyle.Danger)
+const row = new ActionRowBuilder().addComponents(
+new ButtonBuilder()
+.setCustomId("close_ticket")
+.setLabel("❌ Close")
+.setStyle(ButtonStyle.Danger)
 );
 
-ch.send("🎫 Ticket opened");
+ch.send({
+embeds:[new EmbedBuilder().setColor("Green").setTitle("🎫 Ticket Açıldı")],
+components:[row]
+});
 
-return i.reply({content:"OK",ephemeral:true});
+return interaction.reply({content:"Ticket açıldı",ephemeral:true});
 }
 
-// ===== CLOSE =====
-if(i.isButton() && i.customId==="close"){
-const u=await client.users.fetch(i.channel.ownerId).catch(()=>null);
-if(u)u.send("Ticket closed");
-await i.channel.delete();
+// ================= CLOSE TICKET =================
+if(interaction.isButton() && interaction.customId === "close_ticket"){
+
+const user = await client.users.fetch(interaction.channel.ownerId).catch(()=>null);
+
+if(user){
+user.send("🎫 Ticket kapatıldı.");
 }
 
-// ===== APPLY =====
-if(i.isButton() && i.customId==="apply"){
-const modal=new ModalBuilder().setCustomId("apply").setTitle("Apply");
+await interaction.channel.delete();
+}
+
+// ================= APPLY MODAL =================
+if(interaction.isButton() && interaction.customId === "apply"){
+
+const modal = new ModalBuilder()
+.setCustomId("apply_modal")
+.setTitle("🧾 Apply Form");
 
 modal.addComponents(
 new ActionRowBuilder().addComponents(
-new TextInputBuilder().setCustomId("name").setLabel("Name").setStyle(TextInputStyle.Short)
+new TextInputBuilder()
+.setCustomId("name")
+.setLabel("İsim")
+.setStyle(TextInputStyle.Short)
+.setRequired(true)
+),
+new ActionRowBuilder().addComponents(
+new TextInputBuilder()
+.setCustomId("exp")
+.setLabel("Deneyim")
+.setStyle(TextInputStyle.Paragraph)
+.setRequired(true)
 )
 );
 
-return i.showModal(modal);
+return interaction.showModal(modal);
 }
 
-// ===== APPLY SUBMIT =====
-if(i.isModalSubmit() && i.customId==="apply"){
-const log=client.channels.cache.get(config.modLog);
+// ================= APPLY SUBMIT =================
+if(interaction.isModalSubmit() && interaction.customId === "apply_modal"){
 
-const embed=new EmbedBuilder()
+const log = client.channels.cache.get(config.modLog);
+if(!log) return interaction.reply({content:"Modlog yok",ephemeral:true});
+
+const embed = new EmbedBuilder()
 .setColor("Orange")
-.setTitle("New Apply")
-.setDescription(i.user.tag);
+.setTitle("🧾 New Application")
+.setDescription(`User: ${interaction.user.tag}`);
 
-const row=new ActionRowBuilder().addComponents(
-new ButtonBuilder().setCustomId(`ok_${i.user.id}`).setLabel("Approve").setStyle(ButtonStyle.Success),
-new ButtonBuilder().setCustomId(`no_${i.user.id}`).setLabel("Reject").setStyle(ButtonStyle.Danger)
+const row = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId(`approve_${interaction.user.id}`).setLabel("Approve").setStyle(ButtonStyle.Success),
+new ButtonBuilder().setCustomId(`reject_${interaction.user.id}`).setLabel("Reject").setStyle(ButtonStyle.Danger)
 );
 
-log.send({embeds:[embed],components:[row]});
+await log.send({embeds:[embed],components:[row]});
 
-return i.reply({content:"Sent",ephemeral:true});
+return interaction.reply({content:"Gönderildi",ephemeral:true});
 }
 
-// ===== APPROVE =====
-if(i.isButton() && i.customId.startsWith("ok_")){
-const id=i.customId.split("_")[1];
-client.channels.cache.get(config.resultChannel).send(`✅ <@${id}> APPROVED`);
+// ================= APPROVE =================
+if(interaction.isButton() && interaction.customId.startsWith("approve_")){
+
+const id = interaction.customId.split("_")[1];
+
+const result = client.channels.cache.get(config.resultChannel);
+if(result){
+result.send(`✅ <@${id}> Başvurunuz ONAYLANDI`);
 }
 
-// ===== REJECT =====
-if(i.isButton() && i.customId.startsWith("no_")){
-const id=i.customId.split("_")[1];
-client.channels.cache.get(config.resultChannel).send(`❌ <@${id}> REJECTED`);
+return interaction.reply({content:"OK",ephemeral:true});
 }
 
-// ===== BAN =====
-if(i.isChatInputCommand() && i.commandName==="ban"){
-if(!i.member.roles.cache.has(config.staffRole))
-return i.reply({content:"No perm",ephemeral:true});
+// ================= REJECT =================
+if(interaction.isButton() && interaction.customId.startsWith("reject_")){
 
-const u=i.options.getUser("user");
-i.guild.members.ban(u.id);
-i.reply("Banned");
+const id = interaction.customId.split("_")[1];
+
+const result = client.channels.cache.get(config.resultChannel);
+if(result){
+result.send(`❌ <@${id}> Başvurunuz REDDEDİLDİ`);
 }
 
-// ===== KICK =====
-if(i.isChatInputCommand() && i.commandName==="kick"){
-const u=i.options.getUser("user");
-i.guild.members.kick(u.id);
-i.reply("Kicked");
+return interaction.reply({content:"OK",ephemeral:true});
 }
 
-// ===== CLEAR =====
-if(i.isChatInputCommand() && i.commandName==="clear"){
-const amount=i.options.getInteger("amount");
-await i.channel.bulkDelete(amount);
-i.reply({content:"Cleared",ephemeral:true});
+// ================= BAN =================
+if(interaction.isChatInputCommand() && interaction.commandName === "ban"){
+
+if(!interaction.member.roles.cache.has(config.staffRole))
+return interaction.reply({content:"No permission",ephemeral:true});
+
+const user = interaction.options.getUser("user");
+
+await interaction.guild.members.ban(user.id);
+
+return interaction.reply({content:"Banned"});
 }
 
-// ===== AFK =====
-if(i.isChatInputCommand() && i.commandName==="afk"){
-db.afk[i.user.id]=true;
-i.reply("AFK ON");
+// ================= KICK =================
+if(interaction.isChatInputCommand() && interaction.commandName === "kick"){
+
+if(!interaction.member.roles.cache.has(config.staffRole))
+return interaction.reply({content:"No permission",ephemeral:true});
+
+const user = interaction.options.getUser("user");
+
+await interaction.guild.members.kick(user.id);
+
+return interaction.reply({content:"Kicked"});
 }
 
-// ===== DAILY =====
-if(i.isChatInputCommand() && i.commandName==="daily"){
-db.coins[i.user.id]=(db.coins[i.user.id]||0)+100;
-i.reply("+100 coins");
+// ================= ROLVER =================
+if(interaction.isChatInputCommand() && interaction.commandName === "rolver"){
+
+if(!interaction.member.roles.cache.has(config.staffRole))
+return interaction.reply({content:"No permission",ephemeral:true});
+
+const user = interaction.options.getUser("user");
+const role = interaction.options.getRole("role");
+
+await interaction.guild.members.cache.get(user.id).roles.add(role);
+
+return interaction.reply({content:"Role given"});
 }
 
 });
