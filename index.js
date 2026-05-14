@@ -1,242 +1,183 @@
-// index.js
 const {
-  Client,
-  GatewayIntentBits,
-  EmbedBuilder,
-  PermissionsBitField,
-  ChannelType,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
+Client,
+GatewayIntentBits,
+PermissionsBitField,
+EmbedBuilder,
+ChannelType,
+ActionRowBuilder,
+ButtonBuilder,
+ButtonStyle,
+REST,
+Routes,
+SlashCommandBuilder
 } = require("discord.js");
 
 const {
-  joinVoiceChannel
+joinVoiceChannel
 } = require("@discordjs/voice");
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.MessageContent
-  ]
+intents: [
+GatewayIntentBits.Guilds,
+GatewayIntentBits.GuildMembers,
+GatewayIntentBits.GuildMessages,
+GatewayIntentBits.GuildVoiceStates,
+GatewayIntentBits.MessageContent
+]
 });
 
+// CONFIG (Railway ENV)
 const config = {
-  token: "TOKEN",
-  voiceChannel:"SES_KANAL_ID",
-  staffRole:"YETKILI_ROL_ID",
-  ticketCategory:"KATEGORI_ID",
-  logChannel:"LOG_KANAL_ID"
+token: process.env.TOKEN,
+voiceChannel: process.env.VOICE_CHANNEL,
+staffRole: process.env.STAFF_ROLE,
+ticketCategory: process.env.TICKET_CATEGORY,
+logChannel: process.env.LOG_CHANNEL,
+clientId: process.env.CLIENT_ID
 };
 
+// ================= READY =================
 client.once("ready", async () => {
-  console.log(`${client.user.tag} aktif`);
+console.log(`${client.user.tag} aktif`);
 
-  // 7/24 Ses Sistemi
-  const channel = await client.channels.fetch(config.voiceChannel);
+try {
+const channel = await client.channels.fetch(config.voiceChannel);
 
-  joinVoiceChannel({
-    channelId: channel.id,
-    guildId: channel.guild.id,
-    adapterCreator: channel.guild.voiceAdapterCreator,
-    selfDeaf:false
-  });
-
-  console.log("Ses kanalına bağlandı.");
+if (channel) {
+const connection = joinVoiceChannel({
+channelId: channel.id,
+guildId: channel.guild.id,
+adapterCreator: channel.guild.voiceAdapterCreator,
+selfDeaf: false
 });
 
+console.log("🎧 Ses kanalına bağlandı (24/7)");
+}
+} catch (err) {
+console.log("Voice error:", err);
+}
+});
+
+// ================= SLASH COMMAND REGISTER =================
+const commands = [
+new SlashCommandBuilder()
+.setName("ticket")
+.setDescription("Ticket açar"),
+
+new SlashCommandBuilder()
+.setName("basvuru")
+.setDescription("Yetkili başvuru gönderir")
+];
+
+client.on("ready", async () => {
+const rest = new REST({ version: "10" }).setToken(config.token);
+
+try {
+await rest.put(
+Routes.applicationCommands(config.clientId),
+{ body: commands.map(c => c.toJSON()) }
+);
+
+console.log("Slash komutları yüklendi");
+} catch (err) {
+console.log(err);
+}
+});
+
+// ================= INTERACTIONS =================
 client.on("interactionCreate", async interaction => {
 
-  // REGISTER
-  if(interaction.isChatInputCommand()) {
+// ===== TICKET =====
+if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
 
-    if(interaction.commandName === "register") {
+const channel = await interaction.guild.channels.create({
+name: `ticket-${interaction.user.username}`,
+type: ChannelType.GuildText,
+parent: config.ticketCategory,
+permissionOverwrites: [
+{
+id: interaction.guild.id,
+deny: [PermissionsBitField.Flags.ViewChannel]
+},
+{
+id: interaction.user.id,
+allow: [
+PermissionsBitField.Flags.ViewChannel,
+PermissionsBitField.Flags.SendMessages
+]
+},
+{
+id: config.staffRole,
+allow: [
+PermissionsBitField.Flags.ViewChannel,
+PermissionsBitField.Flags.SendMessages
+]
+}
+]
+});
 
-      if(!interaction.member.permissions.has(
-        PermissionsBitField.Flags.Administrator
-      )) return;
+const row = new ActionRowBuilder().addComponents(
+new ButtonBuilder()
+.setCustomId("close_ticket")
+.setLabel("Ticket Kapat")
+.setStyle(ButtonStyle.Danger)
+);
 
-      const user = interaction.options.getUser("user");
-      const age = interaction.options.getInteger("yas");
+channel.send({
+embeds: [
+new EmbedBuilder()
+.setColor("Blue")
+.setTitle("Ticket Sistemi")
+.setDescription("Yetkililer en kısa sürede ilgilenecek.")
+],
+components: [row]
+});
 
-      const member =
-      interaction.guild.members.cache.get(user.id);
+return interaction.reply({
+content: `Ticket açıldı: ${channel}`,
+ephemeral: true
+});
+}
 
-      await member.setNickname(`• İsim | ${age}`);
+// ===== BAŞVURU =====
+if (interaction.isChatInputCommand() && interaction.commandName === "basvuru") {
 
-      interaction.reply({
-        embeds:[
-([
-          new EmbedBuilder()
-          .
-setColor("Green")
-          .setDescription(`${user} kayıt edildi.`)
-        ])
-      });
-    }
+const log = client.channels.cache.get(config.logChannel);
 
-    // TICKET
-    if(interaction.commandName === "ticket") {
+if (!log) return interaction.reply({
+content: "Log kanalı yok",
+ephemeral: true
+});
 
-      const channel =
-      await interaction.guild.channels.create({
-        name:`ticket-${interaction.user.username}`,
-        type:ChannelType.GuildText,
-        parent: config.ticketCategory,
-        permissionOverwrites:[
-([
-          {
-            id:interaction.guild.id,
-            deny:["ViewChannel"]
-          },
-          {
-            id:interaction.user.id,
-            allow:["ViewChannel","SendMessages"]
-          },
-          {
-            id:config.staffRole,
-            allow:["ViewChannel","SendMessages"]
-          }
-        ])
-      });
+const embed = new EmbedBuilder()
+.setColor("Orange")
+.setTitle("Yeni Yetkili Başvurusu")
+.setDescription(`
+Kullanıcı: ${interaction.user.tag}
 
-      const row = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-        .setCustomId("close_ticket")
-        .setLabel("Ticket Kapat")
-        .setStyle(ButtonStyle.Danger)
-      );
-
-      channel.send({
-        embeds:[
-([
-          new EmbedBuilder()
-          .
-setColor("Blue")
-          .setTitle("Ticket Sistemi")
-          .setDescription("Yetkililer sizinle ilgilenecek.")
-        ]),
-        components:[row]
-      });
-
-      interaction.reply({
-        content:`Ticket açıldı: ${channel}`,
-        ephemeral:true
-      });
-    }
-
-    // BAŞVURU
-    if(interaction.commandName === "basvuru") {
-
-      const log =
-      client.channels.cache.get(config.logChannel);
-
-      const embed = new EmbedBuilder()
-      .
-setColor("Orange")
-      .setTitle("Yeni Yetkili Başvurusu")
-      .setDescription(`
 İsim:
 Yaş:
 Aktiflik:
 Deneyim:
-      `);
+`);
 
-      log.send({embeds:[embed]});
+log.send({ embeds: [embed] });
 
-      interaction.reply({
-        content:"Başvurun gönderildi.",
-        ephemeral:true
-      });
-    }
-  }
+return interaction.reply({
+content: "Başvurun alındı.",
+ephemeral: true
+});
+}
 
-  // Ticket kapatma
-  if(interaction.isButton()) {
+// ===== BUTTON =====
+if (interaction.isButton()) {
 
-    if(interaction.customId === "close_ticket") {
-      interaction.channel.delete();
-    }
-  }
+if (interaction.customId === "close_ticket") {
+await interaction.channel.delete();
+}
+}
+
 });
 
-client.on("messageCreate", async message => {
-
-  if(message.author.bot) return;
-
-  const prefix = "!";
-
-  // BAN
-  if(message.content.startsWith(prefix+"ban")) {
-
-    if(!message.member.permissions.has(
-      PermissionsBitField.Flags.BanMembers
-    )) return;
-
-    const member =
-    message.mentions.members.first();
-
-    if(!member) return;
-
-    await member.ban();
-
-    message.channel.send(`${member.user.tag} banlandı.`);
-  }
-
-  // MUTE
-  if(message.content.startsWith(prefix+"mute")) {
-
-    const member =
-    message.mentions.members.first();
-
-    if(!member) return;
-
-    await member.timeout(3600000);
-
-    message.channel.send(`${member.user.tag} mute yedi.`);
-  }
-
-  // PING
-  if(message.content === prefix+"ping") {
-    message.reply(`Ping: ${client.ws.ping}`);
-  }
-});
-
-// Giriş çıkış log
-client.on("guildMemberAdd", member => {
-
-  const log =
-  client.channels.cache.get(config.logChannel);
-
-  log.send({
-    embeds:[
-([
-      new EmbedBuilder()
-      .
-setColor("Green")
-      .setDescription(`${member.user.tag} giriş yaptı.`)
-    ])
-  });
-});
-
-client.on("guildMemberRemove", member => {
-
-  const log =
-  client.channels.cache.get(config.logChannel);
-
-  log.send({
-    embeds:[
-([
-      new EmbedBuilder()
-      .
-setColor("Red")
-      .setDescription(`${member.user.tag} çıktı.`)
-    ])
-  });
-});
-
+// ================= LOGIN =================
 client.login(config.token);
