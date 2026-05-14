@@ -35,14 +35,23 @@ clientId: process.env.CLIENT_ID,
 voiceChannel: process.env.VOICE_CHANNEL,
 staffRole: process.env.STAFF_ROLE,
 ticketCategory: process.env.TICKET_CATEGORY,
-applyLog: process.env.LOG_CHANNEL
+modLogs: process.env.MODLOG_CHANNEL,
+resultChannel: process.env.RESULT_CHANNEL
 };
 
 // ================= SLASH =================
 const commands = [
 new SlashCommandBuilder()
 .setName("panel")
-.setDescription("KateShi Panelini açar")
+.setDescription("📌 KateShi Panelini açar"),
+
+new SlashCommandBuilder()
+.setName("ticket")
+.setDescription("🎫 Ticket sistemi"),
+
+new SlashCommandBuilder()
+.setName("basvuru")
+.setDescription("🧾 Yetkili başvuru")
 ].map(c => c.toJSON());
 
 // ================= READY =================
@@ -56,8 +65,6 @@ await rest.put(
 Routes.applicationCommands(config.clientId),
 { body: commands }
 );
-
-console.log("Slash OK");
 
 // voice
 const channel = await client.channels.fetch(config.voiceChannel);
@@ -75,33 +82,20 @@ selfDeaf: false
 // ================= PANEL =================
 client.on("interactionCreate", async interaction => {
 
-// ================= PANEL COMMAND =================
+// ================= KATESHI PANEL =================
 if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
 
 const row = new ActionRowBuilder().addComponents(
-new StringSelectMenuBuilder()
-.setCustomId("ticket_select")
-.setPlaceholder("🎫 Ticket kategorisi seç")
-.addOptions(
-{
-label: "Discord Bots",
-value: "bot"
-},
-{
-label: "Müşteri Hizmetleri",
-value: "support"
-},
-{
-label: "Diğer",
-value: "other"
-}
-)
-);
-
-const row2 = new ActionRowBuilder().addComponents(
 new ButtonBuilder()
-.setCustomId("apply_form")
-.setLabel("🧾 Yetkili Başvuru")
+.setCustomId("open_ticket_panel")
+.setLabel("🎫 Ticket Aç")
+.setEmoji("🎫")
+.setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("open_apply_panel")
+.setLabel("🧾 Başvuru Yap")
+.setEmoji("🧾")
 .setStyle(ButtonStyle.Success)
 );
 
@@ -109,20 +103,57 @@ return interaction.reply({
 embeds: [
 new EmbedBuilder()
 .setColor("Blue")
-.setTitle("📌 KateShi Panel")
-.setDescription("Kategori seç veya başvuru yap")
+.setTitle("🔥 KateShi Bot Panel")
+.setDescription(`
+🟦 **DESTEK SİSTEMİ**
+🎫 Ticket açmak için butona bas
+
+🧾 **BAŞVURU SİSTEMİ**
+Yetkili olmak için başvur
+`)
+.setFooter({ text: "KateShi Systems" })
 ],
-components: [row, row2]
+components: [row]
 });
 }
 
-// ================= TICKET SELECT =================
+// ================= TICKET OPEN =================
+if (interaction.isButton() && interaction.customId === "open_ticket_panel") {
+
+const row = new ActionRowBuilder().addComponents(
+new StringSelectMenuBuilder()
+.setCustomId("ticket_select")
+.setPlaceholder("🎫 Kategori seç")
+.addOptions(
+{
+label: "🟦 Discord Bot",
+value: "bot"
+},
+{
+label: "🟩 Müşteri Hizmetleri",
+value: "support"
+},
+{
+label: "🟥 Diğer",
+value: "other"
+}
+)
+);
+
+return interaction.reply({
+content: "Kategori seçiniz",
+components: [row],
+ephemeral: true
+});
+}
+
+// ================= TICKET CREATE =================
 if (interaction.isStringSelectMenu() && interaction.customId === "ticket_select") {
 
 const type = interaction.values[0];
 
 const channel = await interaction.guild.channels.create({
-name: `ticket-${interaction.user.username}`,
+name: `🎫-${interaction.user.username}`,
 type: ChannelType.GuildText,
 parent: config.ticketCategory,
 permissionOverwrites: [
@@ -141,9 +172,9 @@ allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMes
 ]
 });
 
-channel.ticketOwner = interaction.user.id;
+channel.ownerId = interaction.user.id;
 
-const closeBtn = new ActionRowBuilder().addComponents(
+const row = new ActionRowBuilder().addComponents(
 new ButtonBuilder()
 .setCustomId("close_ticket")
 .setLabel("❌ Ticket Kapat")
@@ -157,7 +188,7 @@ new EmbedBuilder()
 .setTitle("🎫 Ticket Açıldı")
 .setDescription(`Kategori: **${type}**`)
 ],
-components: [closeBtn]
+components: [row]
 });
 
 return interaction.reply({
@@ -166,33 +197,31 @@ ephemeral: true
 });
 }
 
-// ================= CLOSE TICKET + DM =================
+// ================= CLOSE + DM =================
 if (interaction.isButton() && interaction.customId === "close_ticket") {
 
-const userId = interaction.channel.ticketOwner;
+const user = await client.users.fetch(interaction.channel.ownerId).catch(() => null);
 
-try {
-const user = await client.users.fetch(userId);
-
-await user.send({
+if (user) {
+user.send({
 embeds: [
 new EmbedBuilder()
 .setColor("Red")
 .setTitle("🎫 Ticket Kapatıldı")
-.setDescription("Ticketın başarıyla kapatıldı.")
+.setDescription("Ticketınız kapatıldı.")
 ]
 });
-} catch {}
+}
 
 await interaction.channel.delete();
 }
 
-// ================= APPLY FORM =================
-if (interaction.isButton() && interaction.customId === "apply_form") {
+// ================= APPLY MODAL =================
+if (interaction.isButton() && interaction.customId === "open_apply_panel") {
 
 const modal = new ModalBuilder()
 .setCustomId("apply_modal")
-.setTitle("Yetkili Başvuru");
+.setTitle("🧾 Yetkili Başvuru");
 
 const name = new TextInputBuilder()
 .setCustomId("name")
@@ -209,29 +238,29 @@ const exp = new TextInputBuilder()
 .setLabel("Deneyim")
 .setStyle(TextInputStyle.Paragraph);
 
-const row1 = new ActionRowBuilder().addComponents(name);
-const row2 = new ActionRowBuilder().addComponents(age);
-const row3 = new ActionRowBuilder().addComponents(exp);
+modal.addComponents(
+new ActionRowBuilder().addComponents(name),
+new ActionRowBuilder().addComponents(age),
+new ActionRowBuilder().addComponents(exp)
+);
 
-modal.addComponents(row1, row2, row3);
-
-await interaction.showModal(modal);
+return interaction.showModal(modal);
 }
 
 // ================= APPLY SUBMIT =================
 if (interaction.isModalSubmit() && interaction.customId === "apply_modal") {
 
-const log = client.channels.cache.get(config.applyLog);
+const log = client.channels.cache.get(config.modLogs);
 
 const embed = new EmbedBuilder()
 .setColor("Orange")
 .setTitle("🧾 Yeni Başvuru")
 .setDescription(`
-Kullanıcı: ${interaction.user.tag}
+👤 Kullanıcı: ${interaction.user.tag}
 
-İsim: ${interaction.fields.getTextInputValue("name")}
-Yaş: ${interaction.fields.getTextInputValue("age")}
-Deneyim: ${interaction.fields.getTextInputValue("exp")}
+📛 İsim: ${interaction.fields.getTextInputValue("name")}
+🎂 Yaş: ${interaction.fields.getTextInputValue("age")}
+💼 Deneyim: ${interaction.fields.getTextInputValue("exp")}
 `);
 
 const row = new ActionRowBuilder().addComponents(
@@ -258,11 +287,31 @@ ephemeral: true
 if (interaction.isButton()) {
 
 if (interaction.customId.startsWith("approve_")) {
-interaction.reply({ content: "Başvuru onaylandı", ephemeral: true });
+
+const id = interaction.customId.split("_")[1];
+const user = await client.users.fetch(id).catch(() => null);
+
+const result = client.channels.cache.get(config.resultChannel);
+
+if (user && result) {
+result.send(`✅ ${user} - Başvurunuz ONAYLANDI`);
+}
+
+return interaction.reply({ content: "Onaylandı", ephemeral: true });
 }
 
 if (interaction.customId.startsWith("reject_")) {
-interaction.reply({ content: "Başvuru reddedildi", ephemeral: true });
+
+const id = interaction.customId.split("_")[1];
+const user = await client.users.fetch(id).catch(() => null);
+
+const result = client.channels.cache.get(config.resultChannel);
+
+if (user && result) {
+result.send(`❌ ${user} - Başvurunuz REDDEDİLDİ`);
+}
+
+return interaction.reply({ content: "Reddedildi", ephemeral: true });
 }
 }
 
