@@ -1,12 +1,12 @@
 const {
 Client,
 GatewayIntentBits,
-PermissionsBitField,
 EmbedBuilder,
-ChannelType,
 ActionRowBuilder,
 ButtonBuilder,
 ButtonStyle,
+ChannelType,
+PermissionsBitField,
 StringSelectMenuBuilder,
 ModalBuilder,
 TextInputBuilder,
@@ -35,7 +35,7 @@ clientId: process.env.CLIENT_ID,
 voiceChannel: process.env.VOICE_CHANNEL,
 staffRole: process.env.STAFF_ROLE,
 ticketCategory: process.env.TICKET_CATEGORY,
-modLogs: process.env.MODLOG_CHANNEL,
+modLog: process.env.MODLOG_CHANNEL,
 resultChannel: process.env.RESULT_CHANNEL
 };
 
@@ -43,20 +43,12 @@ resultChannel: process.env.RESULT_CHANNEL
 const commands = [
 new SlashCommandBuilder()
 .setName("panel")
-.setDescription("📌 KateShi Panelini açar"),
-
-new SlashCommandBuilder()
-.setName("ticket")
-.setDescription("🎫 Ticket sistemi"),
-
-new SlashCommandBuilder()
-.setName("basvuru")
-.setDescription("🧾 Yetkili başvuru")
+.setDescription("🛡 Guardix Panelini açar")
 ].map(c => c.toJSON());
 
 // ================= READY =================
 client.once("ready", async () => {
-console.log(`${client.user.tag} aktif`);
+console.log(`🛡 Guardix aktif: ${client.user.tag}`);
 
 // slash register
 const rest = new REST({ version: "10" }).setToken(config.token);
@@ -82,78 +74,60 @@ selfDeaf: false
 // ================= PANEL =================
 client.on("interactionCreate", async interaction => {
 
-// ================= KATESHI PANEL =================
+// ================= PANEL UI =================
 if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
 
 const row = new ActionRowBuilder().addComponents(
-new ButtonBuilder()
-.setCustomId("open_ticket_panel")
-.setLabel("🎫 Ticket Aç")
-.setEmoji("🎫")
-.setStyle(ButtonStyle.Primary),
+new StringSelectMenuBuilder()
+.setCustomId("guardix_ticket")
+.setPlaceholder("🎫 Ticket kategorisi seç")
+.addOptions(
+{
+label: "🛡 Guardix Destek",
+value: "support"
+},
+{
+label: "💻 Bot Sorunu",
+value: "bot"
+},
+{
+label: "❓ Diğer",
+value: "other"
+}
+)
+);
 
+const row2 = new ActionRowBuilder().addComponents(
 new ButtonBuilder()
-.setCustomId("open_apply_panel")
-.setLabel("🧾 Başvuru Yap")
-.setEmoji("🧾")
+.setCustomId("apply_open")
+.setLabel("🧾 Yetkili Başvuru")
 .setStyle(ButtonStyle.Success)
 );
 
 return interaction.reply({
 embeds: [
 new EmbedBuilder()
-.setColor("Blue")
-.setTitle("🔥 KateShi Bot Panel")
+.setColor("DarkBlue")
+.setTitle("🛡 Guardix Panel")
 .setDescription(`
-🟦 **DESTEK SİSTEMİ**
-🎫 Ticket açmak için butona bas
+**Guardix Support System**
 
-🧾 **BAŞVURU SİSTEMİ**
-Yetkili olmak için başvur
+🎫 Ticket açmak için kategori seç
+🧾 Yetkili başvurusu yapabilirsiniz
 `)
-.setFooter({ text: "KateShi Systems" })
+.setThumbnail("https://i.imgur.com/placeholder.png") // BURAYA BOT LOGO KOY
 ],
-components: [row]
-});
-}
-
-// ================= TICKET OPEN =================
-if (interaction.isButton() && interaction.customId === "open_ticket_panel") {
-
-const row = new ActionRowBuilder().addComponents(
-new StringSelectMenuBuilder()
-.setCustomId("ticket_select")
-.setPlaceholder("🎫 Kategori seç")
-.addOptions(
-{
-label: "🟦 Discord Bot",
-value: "bot"
-},
-{
-label: "🟩 Müşteri Hizmetleri",
-value: "support"
-},
-{
-label: "🟥 Diğer",
-value: "other"
-}
-)
-);
-
-return interaction.reply({
-content: "Kategori seçiniz",
-components: [row],
-ephemeral: true
+components: [row, row2]
 });
 }
 
 // ================= TICKET CREATE =================
-if (interaction.isStringSelectMenu() && interaction.customId === "ticket_select") {
+if (interaction.isStringSelectMenu() && interaction.customId === "guardix_ticket") {
 
 const type = interaction.values[0];
 
 const channel = await interaction.guild.channels.create({
-name: `🎫-${interaction.user.username}`,
+name: `🎫-guardix-${interaction.user.username}`,
 type: ChannelType.GuildText,
 parent: config.ticketCategory,
 permissionOverwrites: [
@@ -185,14 +159,15 @@ channel.send({
 embeds: [
 new EmbedBuilder()
 .setColor("Green")
-.setTitle("🎫 Ticket Açıldı")
+.setTitle("🎫 Guardix Ticket Açıldı")
 .setDescription(`Kategori: **${type}**`)
+.setThumbnail("https://i.imgur.com/placeholder.png") // BOT LOGO
 ],
 components: [row]
 });
 
 return interaction.reply({
-content: `Ticket açıldı: ${channel}`,
+content: `🎫 Ticket açıldı: ${channel}`,
 ephemeral: true
 });
 }
@@ -207,7 +182,7 @@ user.send({
 embeds: [
 new EmbedBuilder()
 .setColor("Red")
-.setTitle("🎫 Ticket Kapatıldı")
+.setTitle("🎫 Guardix Ticket")
 .setDescription("Ticketınız kapatıldı.")
 ]
 });
@@ -216,12 +191,12 @@ new EmbedBuilder()
 await interaction.channel.delete();
 }
 
-// ================= APPLY MODAL =================
-if (interaction.isButton() && interaction.customId === "open_apply_panel") {
+// ================= APPLY OPEN =================
+if (interaction.isButton() && interaction.customId === "apply_open") {
 
 const modal = new ModalBuilder()
 .setCustomId("apply_modal")
-.setTitle("🧾 Yetkili Başvuru");
+.setTitle("🧾 Guardix Başvuru");
 
 const name = new TextInputBuilder()
 .setCustomId("name")
@@ -244,17 +219,17 @@ new ActionRowBuilder().addComponents(age),
 new ActionRowBuilder().addComponents(exp)
 );
 
-return interaction.showModal(modal);
+await interaction.showModal(modal);
 }
 
 // ================= APPLY SUBMIT =================
 if (interaction.isModalSubmit() && interaction.customId === "apply_modal") {
 
-const log = client.channels.cache.get(config.modLogs);
+const log = client.channels.cache.get(config.modLog);
 
 const embed = new EmbedBuilder()
 .setColor("Orange")
-.setTitle("🧾 Yeni Başvuru")
+.setTitle("🧾 Yeni Guardix Başvuru")
 .setDescription(`
 👤 Kullanıcı: ${interaction.user.tag}
 
@@ -278,7 +253,7 @@ new ButtonBuilder()
 log.send({ embeds: [embed], components: [row] });
 
 return interaction.reply({
-content: "Başvurun gönderildi",
+content: "🧾 Başvurunuz gönderildi",
 ephemeral: true
 });
 }
@@ -294,7 +269,7 @@ const user = await client.users.fetch(id).catch(() => null);
 const result = client.channels.cache.get(config.resultChannel);
 
 if (user && result) {
-result.send(`✅ ${user} - Başvurunuz ONAYLANDI`);
+result.send(`✅ ${user} - **Başvurunuz ONAYLANDI**`);
 }
 
 return interaction.reply({ content: "Onaylandı", ephemeral: true });
@@ -308,7 +283,7 @@ const user = await client.users.fetch(id).catch(() => null);
 const result = client.channels.cache.get(config.resultChannel);
 
 if (user && result) {
-result.send(`❌ ${user} - Başvurunuz REDDEDİLDİ`);
+result.send(`❌ ${user} - **Başvurunuz REDDEDİLDİ**`);
 }
 
 return interaction.reply({ content: "Reddedildi", ephemeral: true });
