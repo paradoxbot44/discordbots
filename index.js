@@ -12,9 +12,7 @@ Routes,
 SlashCommandBuilder
 } = require("discord.js");
 
-const {
-joinVoiceChannel
-} = require("@discordjs/voice");
+const { joinVoiceChannel } = require("@discordjs/voice");
 
 const client = new Client({
 intents: [
@@ -26,26 +24,28 @@ GatewayIntentBits.MessageContent
 ]
 });
 
+// ================= CONFIG =================
 const config = {
 token: process.env.TOKEN,
+clientId: process.env.CLIENT_ID,
 voiceChannel: process.env.VOICE_CHANNEL,
 staffRole: process.env.STAFF_ROLE,
 ticketCategory: process.env.TICKET_CATEGORY,
-logChannel: process.env.LOG_CHANNEL,
-clientId: process.env.CLIENT_ID
+logChannel: process.env.LOG_CHANNEL
 };
 
-// ================= SLASH COMMANDS =================
+// ================= SLASH =================
 const commands = [
-new SlashCommandBuilder().setName("ticket").setDescription("Ticket açar"),
-new SlashCommandBuilder().setName("basvuru").setDescription("Yetkili başvuru")
+new SlashCommandBuilder()
+.setName("panel")
+.setDescription("Ana paneli açar")
 ].map(c => c.toJSON());
 
-// ================= READY (TEK READY) =================
+// ================= READY =================
 client.once("ready", async () => {
 console.log(`${client.user.tag} aktif`);
 
-// SLASH REGISTER (SADECE 1 KEZ)
+// slash register
 try {
 const rest = new REST({ version: "10" }).setToken(config.token);
 
@@ -56,14 +56,14 @@ Routes.applicationCommands(config.clientId),
 
 console.log("Slash yüklendi");
 } catch (err) {
-console.log("Slash error:", err);
+console.log(err);
 }
 
-// VOICE (SAFE)
+// voice
 try {
 const channel = await client.channels.fetch(config.voiceChannel);
 
-if (channel && channel.joinable) {
+if (channel) {
 joinVoiceChannel({
 channelId: channel.id,
 guildId: channel.guild.id,
@@ -71,18 +71,63 @@ adapterCreator: channel.guild.voiceAdapterCreator,
 selfDeaf: false
 });
 
-console.log("Voice bağlandı");
+console.log("Voice aktif");
 }
 } catch (err) {
-console.log("Voice error:", err);
+console.log(err);
 }
+});
+
+// ================= WELCOME =================
+client.on("guildMemberAdd", member => {
+
+const channel =
+member.guild.systemChannel ||
+member.guild.channels.cache.find(c => c.type === ChannelType.GuildText);
+
+if (!channel) return;
+
+channel.send({
+embeds: [
+new EmbedBuilder()
+.setColor("Green")
+.setTitle("👋 Hoşgeldin!")
+.setDescription(`Sunucuya hoşgeldin ${member.user}`)
+]
+});
 });
 
 // ================= INTERACTIONS =================
 client.on("interactionCreate", async interaction => {
 
-// TICKET
-if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
+// ================= PANEL =================
+if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
+
+const row = new ActionRowBuilder().addComponents(
+new ButtonBuilder()
+.setCustomId("open_ticket")
+.setLabel("🎫 Ticket Aç")
+.setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("open_apply")
+.setLabel("🧾 Başvuru")
+.setStyle(ButtonStyle.Success)
+);
+
+return interaction.reply({
+embeds: [
+new EmbedBuilder()
+.setColor("Blue")
+.setTitle("📌 Panel")
+.setDescription("İstediğini seç")
+],
+components: [row]
+});
+}
+
+// ================= TICKET OPEN =================
+if (interaction.isButton() && interaction.customId === "open_ticket") {
 
 const channel = await interaction.guild.channels.create({
 name: `ticket-${interaction.user.username}`,
@@ -110,18 +155,21 @@ PermissionsBitField.Flags.SendMessages
 ]
 });
 
+// OWNER ID SAKLA
+channel.ownerId = interaction.user.id;
+
 const row = new ActionRowBuilder().addComponents(
 new ButtonBuilder()
 .setCustomId("close_ticket")
-.setLabel("Kapat")
+.setLabel("❌ Kapat")
 .setStyle(ButtonStyle.Danger)
 );
 
 channel.send({
 embeds: [
 new EmbedBuilder()
-.setColor("Blue")
-.setTitle("Ticket Sistemi")
+.setColor("Green")
+.setTitle("🎫 Ticket Açıldı")
 .setDescription("Yetkililer ilgilenecek")
 ],
 components: [row]
@@ -133,36 +181,62 @@ ephemeral: true
 });
 }
 
-// BASVURU
-if (interaction.isChatInputCommand() && interaction.commandName === "basvuru") {
+// ================= APPLY =================
+if (interaction.isButton() && interaction.customId === "open_apply") {
 
 const log = client.channels.cache.get(config.logChannel);
 
-if (!log) return interaction.reply({
-content: "Log yok",
+if (!log) {
+return interaction.reply({
+content: "Log kanalı yok",
 ephemeral: true
 });
+}
 
 const embed = new EmbedBuilder()
 .setColor("Orange")
-.setTitle("Başvuru")
-.setDescription(`Kullanıcı: ${interaction.user.tag}`);
+.setTitle("🧾 Yetkili Başvurusu")
+.setDescription(`
+Kullanıcı: ${interaction.user.tag}
+
+İsim:
+Yaş:
+Aktiflik:
+Deneyim:
+`);
 
 log.send({ embeds: [embed] });
 
 return interaction.reply({
-content: "Gönderildi",
+content: "Başvurun gönderildi",
 ephemeral: true
 });
 }
 
-// BUTTON
-if (interaction.isButton()) {
-if (interaction.customId === "close_ticket") {
-await interaction.channel.delete();
+// ================= CLOSE TICKET + DM =================
+if (interaction.isButton() && interaction.customId === "close_ticket") {
+
+const userId = interaction.channel.ownerId;
+
+try {
+const user = await client.users.fetch(userId);
+
+await user.send({
+embeds: [
+new EmbedBuilder()
+.setColor("Red")
+.setTitle("🎫 Ticket Kapatıldı")
+.setDescription("Ticketın kapatıldı, teşekkürler.")
+]
+});
+} catch (err) {
+console.log("DM gönderilemedi");
 }
+
+await interaction.channel.delete();
 }
 
 });
 
+// ================= LOGIN =================
 client.login(config.token);
