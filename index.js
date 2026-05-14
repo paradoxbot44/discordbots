@@ -24,68 +24,37 @@ const client = new Client({
   ]
 });
 
-// ================= DATA =================
-const spamMap = new Map();
-const xp = new Map();
-const msgCount = new Map();
-
-// ================= SLASH COMMANDS =================
+// ================= COMMANDS =================
 const commands = [
-  new SlashCommandBuilder().setName("panel").setDescription("Paneli aç"),
-  new SlashCommandBuilder().setName("ticket").setDescription("Ticket sistemi"),
-  new SlashCommandBuilder().setName("basvuru").setDescription("Başvuru formu"),
-  new SlashCommandBuilder().setName("aktif").setDescription("En aktif kullanıcı"),
-  new SlashCommandBuilder().setName("top").setDescription("XP sıralama")
+  new SlashCommandBuilder().setName("panel").setDescription("Panel aç"),
 ].map(c => c.toJSON());
 
 // ================= READY =================
-client.once("ready", async () => {
-  console.log(`🛡️ GUARDIX SLASH ONLINE: ${client.user.tag}`);
+client.once("ready", () => {
+  console.log(`🛡️ GUARDIX V7 ONLINE: ${client.user.tag}`);
 });
 
-// ================= WELCOME =================
-client.on("guildMemberAdd", (m) => {
-  const ch = m.guild.channels.cache.find(c => c.name === "karsilama");
-  ch?.send(`👋 Hoş geldin ${m} | Guardix aktif 🛡️`);
-});
+// ================= REGISTER SLASH =================
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
-// ================= MESSAGE + ANTI SPAM =================
-client.on("messageCreate", (m) => {
-  if (!m.guild || m.author.bot) return;
-
-  const id = m.author.id;
-
-  if (!spamMap.has(id)) spamMap.set(id, []);
-
-  const now = Date.now();
-  const arr = spamMap.get(id);
-
-  arr.push(now);
-
-  const recent = arr.filter(t => now - t < 10000);
-  spamMap.set(id, recent);
-
-  if (recent.length >= 10) {
-    m.guild.members.fetch(id).then(member => {
-      if (member.moderatable) {
-        member.timeout(60 * 1000, "Spam").catch(() => {});
-      }
-    });
-
-    m.channel.send(`🚨 ${m.author} spam yasak ❌ (1 dk mute)`);
+(async () => {
+  try {
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+    console.log("Slash registered");
+  } catch (e) {
+    console.log(e);
   }
+})();
 
-  xp.set(id, (xp.get(id) || 0) + 1);
-  msgCount.set(id, (msgCount.get(id) || 0) + 1);
-});
-
-// ================= INTERACTIONS =================
+// ================= PANEL =================
 client.on("interactionCreate", async (i) => {
 
   // ================= SLASH =================
   if (i.isChatInputCommand()) {
 
-    // PANEL
     if (i.commandName === "panel") {
 
       const menu = new StringSelectMenuBuilder()
@@ -97,33 +66,17 @@ client.on("interactionCreate", async (i) => {
         ]);
 
       return i.reply({
-        content: "🛡️ GUARDIX PANEL",
+        content: "🛡️ PANEL",
         components: [new ActionRowBuilder().addComponents(menu)],
         ephemeral: true
       });
-    }
-
-    // TICKET
-    if (i.commandName === "ticket") {
-      return i.reply({ content: "Panelden aç: /panel", ephemeral: true });
-    }
-
-    // AKTİF
-    if (i.commandName === "aktif") {
-      const top = [...msgCount.entries()].sort((a,b)=>b[1]-a[1])[0];
-      return i.reply(`🔥 EN AKTİF: <@${top[0]}>`);
-    }
-
-    // TOP
-    if (i.commandName === "top") {
-      const top = [...xp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
-      return i.reply(top.map(x => `<@${x[0]}> - ${x[1]} XP`).join("\n"));
     }
   }
 
   // ================= DROPDOWN =================
   if (i.isStringSelectMenu()) {
 
+    // TICKET
     if (i.values[0] === "ticket") {
 
       const ch = await i.guild.channels.create({
@@ -135,53 +88,60 @@ client.on("interactionCreate", async (i) => {
           },
           {
             id: i.user.id,
-            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages
+            ]
           },
           {
             id: "STAFF_ROLE_ID",
-            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages
+            ]
           }
         ]
       });
-
-      ch.send(`🎫 Ticket açıldı\n🟡 inceleniyor...\n⏳ bekleyiniz`);
 
       const btn = new ButtonBuilder()
         .setCustomId("close")
         .setLabel("Kapat")
         .setStyle(ButtonStyle.Danger);
 
-      ch.send({ components: [new ActionRowBuilder().addComponents(btn)] });
+      ch.send({
+        content: "🎫 Ticket açıldı | 🟡 inceleniyor...",
+        components: [new ActionRowBuilder().addComponents(btn)]
+      });
 
       return i.reply({ content: "Ticket açıldı", ephemeral: true });
     }
 
-    // ================= FORM =================
+    // FORM
     if (i.values[0] === "apply") {
 
       const modal = new ModalBuilder()
         .setCustomId("form")
-        .setTitle("🧾 BAŞVURU");
+        .setTitle("Başvuru");
 
-      const q1 = new TextInputBuilder()
+      const age = new TextInputBuilder()
         .setCustomId("age")
         .setLabel("Yaş")
         .setStyle(TextInputStyle.Short);
 
-      const q2 = new TextInputBuilder()
+      const exp = new TextInputBuilder()
         .setCustomId("exp")
         .setLabel("Tecrübe")
         .setStyle(TextInputStyle.Paragraph);
 
-      const q3 = new TextInputBuilder()
+      const why = new TextInputBuilder()
         .setCustomId("why")
         .setLabel("Neden biz?")
         .setStyle(TextInputStyle.Paragraph);
 
       modal.addComponents(
-        new ActionRowBuilder().addComponents(q1),
-        new ActionRowBuilder().addComponents(q2),
-        new ActionRowBuilder().addComponents(q3)
+        new ActionRowBuilder().addComponents(age),
+        new ActionRowBuilder().addComponents(exp),
+        new ActionRowBuilder().addComponents(why)
       );
 
       return i.showModal(modal);
@@ -201,7 +161,12 @@ client.on("interactionCreate", async (i) => {
 
     const embed = new EmbedBuilder()
       .setTitle("🧾 BAŞVURU")
-      .setDescription(`${i.user}\n${age}\n${exp}\n${why}`);
+      .setDescription(
+`👤 ${i.user}
+🎂 ${age}
+🧠 ${exp}
+❓ ${why}`
+      );
 
     const ok = new ButtonBuilder()
       .setCustomId(`ok_${i.user.id}`)
@@ -214,7 +179,7 @@ client.on("interactionCreate", async (i) => {
       .setStyle(ButtonStyle.Danger);
 
     ch.send({
-      content: "🛡️ YETKİLİ PANEL",
+      content: "🛡️ BAŞVURU PANEL",
       embeds: [embed],
       components: [new ActionRowBuilder().addComponents(ok, no)]
     });
@@ -222,7 +187,7 @@ client.on("interactionCreate", async (i) => {
     return i.reply({ content: "Başvuru gönderildi", ephemeral: true });
   }
 
-  // ================= CLOSE =================
+  // ================= CLOSE TICKET =================
   if (i.isButton() && i.customId === "close") {
 
     try {
@@ -231,39 +196,34 @@ client.on("interactionCreate", async (i) => {
 
     await i.reply({ content: "Kapatılıyor...", ephemeral: true });
 
-    setTimeout(() => i.channel.delete().catch(()=>{}), 1200);
+    setTimeout(() => i.channel.delete().catch(() => {}), 1200);
   }
 
-  // ================= ONAY / RED =================
-  if (i.isButton() && i.customId.startsWith("ok_")) {
-    const id = i.customId.split("_")[1];
-    const ch = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
-    ch?.send(`🟢 <@${id}> ONAYLANDI 🎉`);
-    return i.reply({ ephemeral: true, content: "OK" });
-  }
+  // ================= APPROVE / REJECT FIX =================
+  if (i.isButton() && (i.customId.startsWith("ok_") || i.customId.startsWith("no_"))) {
 
-  if (i.isButton() && i.customId.startsWith("no_")) {
-    const id = i.customId.split("_")[1];
-    const ch = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
-    ch?.send(`🔴 <@${id}> REDDEDİLDİ ❌`);
-    return i.reply({ ephemeral: true, content: "NO" });
+    const userId = i.customId.split("_")[1];
+
+    let channel = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
+
+    // kanal yoksa oluştur
+    if (!channel) {
+      channel = await i.guild.channels.create({
+        name: "basvuru-sonuc"
+      });
+    }
+
+    if (i.customId.startsWith("ok_")) {
+      channel.send(`🟢 <@${userId}> BAŞVURUN ONAYLANDI 🎉`);
+      return i.reply({ content: "Onaylandı", ephemeral: true });
+    }
+
+    if (i.customId.startsWith("no_")) {
+      channel.send(`🔴 <@${userId}> BAŞVURUN REDDEDİLDİ ❌`);
+      return i.reply({ content: "Reddedildi", ephemeral: true });
+    }
   }
 });
-
-// ================= SLASH REGISTER =================
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-
-(async () => {
-  try {
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-    console.log("Slash commands yüklendi");
-  } catch (e) {
-    console.log(e);
-  }
-})();
 
 // ================= LOGIN =================
 client.login(process.env.TOKEN);
