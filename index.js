@@ -19,27 +19,32 @@ const {
 } = require("discord.js");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 /* =========================
-   SLASH COMMANDS REGISTER
+   AKTİFLİK SİSTEMİ
+========================= */
+const msgCount = new Map();
+
+client.on("messageCreate", (m) => {
+  if (m.author.bot) return;
+  msgCount.set(m.author.id, (msgCount.get(m.author.id) || 0) + 1);
+});
+
+/* =========================
+   SLASH COMMANDS
 ========================= */
 const commands = [
-
-  new SlashCommandBuilder()
-    .setName("ticket")
-    .setDescription("🎫 Ticket panelini aç"),
-
-  new SlashCommandBuilder()
-    .setName("basvuru")
-    .setDescription("📋 Başvuru panelini aç"),
-
-  new SlashCommandBuilder()
-    .setName("aktif")
-    .setDescription("📊 En aktif kullanıcıyı göster")
-
-].map(x => x.toJSON());
+  new SlashCommandBuilder().setName("ticket").setDescription("🎫 Ticket panel"),
+  new SlashCommandBuilder().setName("basvuru").setDescription("📋 Başvuru panel"),
+  new SlashCommandBuilder().setName("aktif").setDescription("📊 En aktif kullanıcı"),
+  new SlashCommandBuilder().setName("cekilis").setDescription("🎉 Çekiliş başlat")
+].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
@@ -48,26 +53,14 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
     Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
     { body: commands }
   );
-  console.log("Slash commands yüklendi");
+  console.log("Slash hazır");
 })();
 
 /* =========================
-   MESSAGE TRACK (AKTİFLİK)
-========================= */
-const userMessageCount = new Map();
-
-client.on("messageCreate", (msg) => {
-  if (msg.author.bot) return;
-
-  const id = msg.author.id;
-  userMessageCount.set(id, (userMessageCount.get(id) || 0) + 1);
-});
-
-/* =========================
-   BOT READY
+   READY
 ========================= */
 client.once("ready", () => {
-  console.log(`${client.user.tag} aktif`);
+  console.log(`${client.user.tag} online`);
 });
 
 /* =========================
@@ -78,7 +71,7 @@ client.on("interactionCreate", async (i) => {
   /* ===== SLASH ===== */
   if (i.isChatInputCommand()) {
 
-    /* TICKET PANEL */
+    /* TICKET */
     if (i.commandName === "ticket") {
 
       const menu = new StringSelectMenuBuilder()
@@ -91,18 +84,13 @@ client.on("interactionCreate", async (i) => {
           { label: "Destek", value: "support" }
         );
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Gelişmiş Ticket Sistemi")
-        .setColor("Blue")
-        .setDescription("Kategori seçerek ticket aç");
-
       return i.reply({
-        embeds: [embed],
+        embeds: [new EmbedBuilder().setTitle("🎫 Ticket Sistemi").setColor("Blue")],
         components: [new ActionRowBuilder().addComponents(menu)]
       });
     }
 
-    /* BASVURU PANEL */
+    /* BASVURU */
     if (i.commandName === "basvuru") {
 
       const btn = new ButtonBuilder()
@@ -110,40 +98,44 @@ client.on("interactionCreate", async (i) => {
         .setLabel("📋 Başvuru Yap")
         .setStyle(ButtonStyle.Success);
 
-      const embed = new EmbedBuilder()
-        .setTitle("📋 Başvuru Sistemi")
-        .setColor("Green")
-        .setDescription("Başvuru formunu aç");
-
       return i.reply({
-        embeds: [embed],
+        embeds: [new EmbedBuilder().setTitle("📋 Başvuru").setColor("Green")],
         components: [new ActionRowBuilder().addComponents(btn)]
       });
     }
 
-    /* AKTIF USER */
+    /* AKTİF */
     if (i.commandName === "aktif") {
 
-      let topUser = [...userMessageCount.entries()]
-        .sort((a, b) => b[1] - a[1])[0];
+      const top = [...msgCount.entries()].sort((a,b)=>b[1]-a[1])[0];
+      if (!top) return i.reply("Veri yok");
 
-      if (!topUser) return i.reply("Henüz veri yok");
+      const user = await client.users.fetch(top[0]);
 
-      const user = await client.users.fetch(topUser[0]);
+      return i.reply({
+        embeds: [
+          new EmbedBuilder()
+          .setTitle("📊 En Aktif")
+          .setDescription(`${user.tag}`)
+          .addFields({ name: "Mesaj", value: `${top[1]}` })
+        ]
+      });
+    }
+
+    /* ÇEKİLİŞ */
+    if (i.commandName === "cekilis") {
 
       const embed = new EmbedBuilder()
-        .setTitle("📊 En Aktif Kullanıcı")
-        .setColor("Gold")
-        .setDescription(`${user.tag}`)
-        .addFields(
-          { name: "Mesaj Sayısı", value: `${topUser[1]}` }
-        );
+        .setTitle("🎉 ÇEKİLİŞ")
+        .setDescription("Katılmak için 🎉 bas")
+        .setColor("Gold");
 
-      return i.reply({ embeds: [embed] });
+      const msg = await i.reply({ embeds: [embed], fetchReply: true });
+      msg.react("🎉");
     }
   }
 
-  /* ===== TICKET SYSTEM ===== */
+  /* ===== TICKET ===== */
   if (i.isStringSelectMenu()) {
 
     if (i.customId === "ticket_menu") {
@@ -154,73 +146,42 @@ client.on("interactionCreate", async (i) => {
         name: `ticket-${i.user.username}`,
         type: ChannelType.GuildText,
         permissionOverwrites: [
-          {
-            id: i.guild.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-          },
-          {
-            id: i.user.id,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages
-            ]
-          }
+          { id: i.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: i.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
         ]
       });
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Ticket Açıldı")
-        .setColor("Yellow")
-        .setDescription(`Kategori: **${type}**
-        
-Durum: 🟡 İnceleniyor`);
-
       const row = new ActionRowBuilder().addComponents(
-
-        new ButtonBuilder()
-          .setCustomId("claim")
-          .setLabel("👮 Claim")
-          .setStyle(ButtonStyle.Primary),
-
-        new ButtonBuilder()
-          .setCustomId("inceleniyor")
-          .setLabel("⏳ İnceleniyor")
-          .setStyle(ButtonStyle.Secondary),
-
-        new ButtonBuilder()
-          .setCustomId("cozuldu")
-          .setLabel("✅ Çözüldü")
-          .setStyle(ButtonStyle.Success),
-
-        new ButtonBuilder()
-          .setCustomId("kapat")
-          .setLabel("🔒 Kapat")
-          .setStyle(ButtonStyle.Danger)
-
+        new ButtonBuilder().setCustomId("claim").setLabel("👮 Claim").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("inceleniyor").setLabel("⏳ İnceleniyor").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("cozuldu").setLabel("✅ Çözüldü").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("kapat").setLabel("🔒 Kapat").setStyle(ButtonStyle.Danger)
       );
 
       await channel.send({
         content: `<@${i.user.id}>`,
-        embeds: [embed],
+        embeds: [
+          new EmbedBuilder()
+          .setTitle("🎫 Ticket Açıldı")
+          .setDescription(`Kategori: ${type}`)
+          .setColor("Yellow")
+        ],
         components: [row]
       });
 
-      return i.reply({
-        content: `Ticket açıldı: ${channel}`,
-        ephemeral: true
-      });
+      return i.reply({ content: `Ticket: ${channel}`, ephemeral: true });
     }
   }
 
   /* ===== BUTTONS ===== */
   if (i.isButton()) {
 
-    /* BASVURU MODAL */
+    /* BASVURU */
     if (i.customId === "basvuru_open") {
 
       const modal = new ModalBuilder()
         .setCustomId("basvuru_modal")
-        .setTitle("📋 Başvuru Formu");
+        .setTitle("📋 Başvuru");
 
       const yas = new TextInputBuilder()
         .setCustomId("yas")
@@ -244,17 +205,17 @@ Durum: 🟡 İnceleniyor`);
     const admin = i.member.permissions.has(PermissionFlagsBits.Administrator);
     if (!admin) return;
 
-    if (i.customId === "claim") return i.reply("👮 Ticket alındı");
-    if (i.customId === "inceleniyor") return i.reply("⏳ İnceleniyor");
-    if (i.customId === "cozuldu") return i.reply("✅ Çözüldü");
+    if (i.customId === "claim") return i.reply("👮 alındı");
+    if (i.customId === "inceleniyor") return i.reply("⏳ inceleniyor");
+    if (i.customId === "cozuldu") return i.reply("✅ çözüldü");
 
     if (i.customId === "kapat") {
-      await i.reply("🔒 Kapanıyor...");
-      setTimeout(() => i.channel.delete(), 4000);
+      await i.reply("kapanıyor");
+      setTimeout(() => i.channel.delete(), 3000);
     }
   }
 
-  /* ===== BASVURU ===== */
+  /* ===== BASVURU MODAL ===== */
   if (i.isModalSubmit()) {
 
     if (i.customId === "basvuru_modal") {
@@ -262,26 +223,24 @@ Durum: 🟡 İnceleniyor`);
       const yas = i.fields.getTextInputValue("yas");
       const deneyim = i.fields.getTextInputValue("deneyim");
 
-      const log = i.guild.channels.cache.find(c => c.name === "başvurular");
+      const log = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
 
       if (!log)
-        return i.reply({ content: "Başvurular kanalı yok", ephemeral: true });
+        return i.reply({ content: "basvuru-sonuc kanalı yok", ephemeral: true });
 
-      const embed = new EmbedBuilder()
-        .setTitle("📋 Yeni Başvuru")
-        .setColor("Orange")
-        .addFields(
-          { name: "Kullanıcı", value: i.user.tag },
-          { name: "Yaş", value: yas },
-          { name: "Deneyim", value: deneyim }
-        );
-
-      log.send({ embeds: [embed] });
-
-      return i.reply({
-        content: "📩 Başvuru gönderildi",
-        ephemeral: true
+      log.send({
+        embeds: [
+          new EmbedBuilder()
+          .setTitle("📋 Başvuru")
+          .addFields(
+            { name: "Kullanıcı", value: i.user.tag },
+            { name: "Yaş", value: yas },
+            { name: "Deneyim", value: deneyim }
+          )
+        ]
       });
+
+      return i.reply({ content: "Gönderildi", ephemeral: true });
     }
   }
 
