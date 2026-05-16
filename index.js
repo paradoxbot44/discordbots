@@ -8,6 +8,8 @@ const {
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   PermissionFlagsBits,
   ModalBuilder,
@@ -21,34 +23,34 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, () => {
-  console.log(`${client.user.tag} online`);
+  console.log(`${client.user.tag} aktif`);
 });
 
 /* =========================
-   TICKET PANEL KOMUTU
+   PANEL KOMUTLARI
 ========================= */
 client.on("messageCreate", async (message) => {
-  if (message.content === "!ticketpanel") {
-    const embed = new EmbedBuilder()
-      .setColor("Blue")
-      .setTitle("🎫 Ticket Sistemi")
-      .setDescription("Aşağıdan ticket türünü seçin.");
+
+  if (message.content === "!ticket") {
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId("ticket_menu")
-      .setPlaceholder("Ticket seç")
+      .setPlaceholder("🎫 Ticket seç")
       .addOptions(
         {
           label: "Teknik Destek",
-          value: "destek",
-          description: "Yardım almak için"
+          value: "destek"
         },
         {
           label: "Satın Alım",
-          value: "satin_alim",
-          description: "Satın alma desteği"
+          value: "satin"
         }
       );
+
+    const embed = new EmbedBuilder()
+      .setTitle("🎫 Ticket Sistemi")
+      .setColor("Blue")
+      .setDescription("Aşağıdan seç");
 
     message.channel.send({
       embeds: [embed],
@@ -57,12 +59,21 @@ client.on("messageCreate", async (message) => {
   }
 
   if (message.content === "!basvuru") {
-    const embed = new EmbedBuilder()
-      .setColor("Green")
-      .setTitle("📋 Başvuru Sistemi")
-      .setDescription("Başvuru yapmak için butona bas.");
 
-    message.channel.send({ embeds: [embed] });
+    const btn = new ButtonBuilder()
+      .setCustomId("basvuru_ac")
+      .setLabel("📋 Başvuru Yap")
+      .setStyle(ButtonStyle.Success);
+
+    const embed = new EmbedBuilder()
+      .setTitle("📋 Başvuru Sistemi")
+      .setColor("Green")
+      .setDescription("Başvuru için tıkla");
+
+    message.channel.send({
+      embeds: [embed],
+      components: [new ActionRowBuilder().addComponents(btn)]
+    });
   }
 });
 
@@ -71,8 +82,9 @@ client.on("messageCreate", async (message) => {
 ========================= */
 client.on("interactionCreate", async (interaction) => {
 
-  /* ===== TICKET DROPDOWN ===== */
+  /* ================= TICKET ================= */
   if (interaction.isStringSelectMenu()) {
+
     if (interaction.customId === "ticket_menu") {
 
       const type = interaction.values[0];
@@ -91,22 +103,41 @@ client.on("interactionCreate", async (interaction) => {
               PermissionFlagsBits.ViewChannel,
               PermissionFlagsBits.SendMessages
             ]
-          },
-          {
-            id: interaction.guild.roles.everyone,
-            deny: [PermissionFlagsBits.ViewChannel]
           }
         ]
       });
 
       const embed = new EmbedBuilder()
-        .setColor("Yellow")
         .setTitle("🎫 Ticket Açıldı")
+        .setColor("Yellow")
         .setDescription(`Tür: **${type}**`);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("claim")
+          .setLabel("👮 Claim")
+          .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+          .setCustomId("inceleniyor")
+          .setLabel("⏳ İnceleniyor")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("cozuldu")
+          .setLabel("✅ Çözüldü")
+          .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+          .setCustomId("kapat")
+          .setLabel("🔒 Kapat")
+          .setStyle(ButtonStyle.Danger)
+      );
 
       channel.send({
         content: `<@${interaction.user.id}>`,
-        embeds: [embed]
+        embeds: [embed],
+        components: [row]
       });
 
       return interaction.reply({
@@ -116,13 +147,57 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  /* ===== BASVURU BUTTON (fake trigger) ===== */
+  /* ================= BUTTONS ================= */
   if (interaction.isButton()) {
+
+    const isTicketChannel = interaction.channel.name.startsWith("ticket-");
+
+    /* sadece yetkili kontrolü */
+    const isAdmin = interaction.member.permissions.has(
+      PermissionFlagsBits.Administrator
+    );
+
+    if (!isTicketChannel) return;
+
+    /* CLAIM */
+    if (interaction.customId === "claim") {
+      if (!isAdmin)
+        return interaction.reply({ content: "❌ Yetkin yok", ephemeral: true });
+
+      return interaction.reply("👮 Ticket claimlendi");
+    }
+
+    /* İNCELENİYOR */
+    if (interaction.customId === "inceleniyor") {
+      if (!isAdmin)
+        return interaction.reply({ content: "❌ Yetkin yok", ephemeral: true });
+
+      return interaction.reply("⏳ Ticket inceleniyor");
+    }
+
+    /* ÇÖZÜLDÜ */
+    if (interaction.customId === "cozuldu") {
+      if (!isAdmin)
+        return interaction.reply({ content: "❌ Yetkin yok", ephemeral: true });
+
+      return interaction.reply("✅ Ticket çözüldü");
+    }
+
+    /* KAPAT */
+    if (interaction.customId === "kapat") {
+      if (!isAdmin)
+        return interaction.reply({ content: "❌ Yetkin yok", ephemeral: true });
+
+      await interaction.reply("🔒 Ticket 5 saniye içinde kapanıyor");
+      setTimeout(() => interaction.channel.delete(), 5000);
+    }
+
+    /* BAŞVURU */
     if (interaction.customId === "basvuru_ac") {
 
       const modal = new ModalBuilder()
         .setCustomId("basvuru_modal")
-        .setTitle("Başvuru Formu");
+        .setTitle("📋 Başvuru Formu");
 
       const yas = new TextInputBuilder()
         .setCustomId("yas")
@@ -143,7 +218,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  /* ===== BASVURU SUBMIT ===== */
+  /* ================= BASVURU ================= */
   if (interaction.isModalSubmit()) {
 
     if (interaction.customId === "basvuru_modal") {
@@ -151,30 +226,29 @@ client.on("interactionCreate", async (interaction) => {
       const yas = interaction.fields.getTextInputValue("yas");
       const deneyim = interaction.fields.getTextInputValue("deneyim");
 
-      const logChannel = interaction.guild.channels.cache.find(
+      const log = interaction.guild.channels.cache.find(
         c => c.name === "başvurular"
       );
 
-      if (!logChannel) {
+      if (!log)
         return interaction.reply({
-          content: "❌ 'başvurular' kanalı yok!",
+          content: "❌ başvurular kanalı yok",
           ephemeral: true
         });
-      }
 
       const embed = new EmbedBuilder()
-        .setColor("Orange")
         .setTitle("📋 Yeni Başvuru")
+        .setColor("Orange")
         .addFields(
           { name: "Kullanıcı", value: interaction.user.tag },
           { name: "Yaş", value: yas },
           { name: "Deneyim", value: deneyim }
         );
 
-      logChannel.send({ embeds: [embed] });
+      log.send({ embeds: [embed] });
 
       return interaction.reply({
-        content: "✅ Başvuru gönderildi.",
+        content: "✅ Başvuru gönderildi",
         ephemeral: true
       });
     }
