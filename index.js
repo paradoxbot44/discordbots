@@ -1,229 +1,325 @@
+require("dotenv").config();
+
 const {
   Client,
   GatewayIntentBits,
+  Partials,
+  Events,
   REST,
   Routes,
   SlashCommandBuilder,
+  EmbedBuilder,
   ActionRowBuilder,
-  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
+  PermissionFlagsBits,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ButtonBuilder,
-  ButtonStyle,
-  PermissionsBitField,
-  EmbedBuilder
+  StringSelectMenuBuilder
 } = require("discord.js");
 
+const {
+  joinVoiceChannel
+} = require("@discordjs/voice");
+
+const mongoose = require("mongoose");
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: Object.values(GatewayIntentBits),
+  partials: Object.values(Partials)
 });
 
-// ================= COMMANDS =================
+mongoose.connect(process.env.MONGO_URI)
+.then(() => console.log("Mongo bağlandı"))
+.catch(console.error);
+
 const commands = [
-  new SlashCommandBuilder().setName("panel").setDescription("Panel aç"),
+
+  new SlashCommandBuilder()
+    .setName("ping")
+    .setDescription("Bot ping"),
+
+  new SlashCommandBuilder()
+    .setName("ticket")
+    .setDescription("Ticket paneli"),
+
+  new SlashCommandBuilder()
+    .setName("basvuru")
+    .setDescription("Başvuru paneli"),
+
 ].map(c => c.toJSON());
 
-// ================= READY =================
-client.once("ready", () => {
-  console.log(`🛡️ GUARDIX V7 ONLINE: ${client.user.tag}`);
-});
-
-// ================= REGISTER SLASH =================
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+const rest = new REST({ version: "10" })
+.setToken(process.env.TOKEN);
 
 (async () => {
   try {
+
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
       { body: commands }
     );
-    console.log("Slash registered");
-  } catch (e) {
-    console.log(e);
+
+    console.log("Slash commandlar yüklendi");
+
+  } catch(err) {
+    console.log(err);
   }
 })();
 
-// ================= PANEL =================
-client.on("interactionCreate", async (i) => {
+client.once(Events.ClientReady, async () => {
 
-  // ================= SLASH =================
-  if (i.isChatInputCommand()) {
+  console.log(`${client.user.tag} aktif`);
 
-    if (i.commandName === "panel") {
+  const channel = client.channels.cache.get(process.env.VOICE_CHANNEL);
 
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId("menu")
-        .setPlaceholder("Seç")
-        .addOptions([
-          { label: "🎫 Ticket Aç", value: "ticket" },
-          { label: "🧾 Başvuru", value: "apply" }
-        ]);
+  if(channel) {
 
-      return i.reply({
-        content: "🛡️ PANEL",
-        components: [new ActionRowBuilder().addComponents(menu)],
-        ephemeral: true
-      });
-    }
+    joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator
+    });
+
+    console.log("Ses kanalına bağlandı");
   }
 
-  // ================= DROPDOWN =================
-  if (i.isStringSelectMenu()) {
+});
 
-    // TICKET
-    if (i.values[0] === "ticket") {
+client.on(Events.InteractionCreate, async interaction => {
 
-      const ch = await i.guild.channels.create({
-        name: `ticket-${i.user.username}`,
+  if(interaction.isChatInputCommand()) {
+
+    if(interaction.commandName === "ping") {
+
+      const embed = new EmbedBuilder()
+      .setColor("Red")
+      .setTitle("🏓 Pong")
+      .setDescription(`Ping: ${client.ws.ping}`);
+
+      return interaction.reply({
+        embeds: [embed]
+      });
+
+    }
+
+    if(interaction.commandName === "ticket") {
+
+      const row = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+        .setCustomId("ticket_ac")
+        .setLabel("🎫 Ticket Aç")
+        .setStyle(ButtonStyle.Primary)
+      );
+
+      const embed = new EmbedBuilder()
+      .setColor("Blue")
+      .setTitle("Destek Sistemi")
+      .setDescription("Ticket açmak için aşağıdaki butona bas.");
+
+      return interaction.reply({
+        embeds: [embed],
+        components: [row]
+      });
+
+    }
+
+    if(interaction.commandName === "basvuru") {
+
+      const row = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+        .setCustomId("basvuru_yap")
+        .setLabel("📋 Başvuru Yap")
+        .setStyle(ButtonStyle.Success)
+      );
+
+      return interaction.reply({
+        content: "Başvuru paneli",
+        components: [row]
+      });
+
+    }
+
+  }
+
+  if(interaction.isButton()) {
+
+    if(interaction.customId === "ticket_ac") {
+
+      const channel = await interaction.guild.channels.create({
+        name: `ticket-${interaction.user.username}`,
+        type: ChannelType.GuildText,
         permissionOverwrites: [
           {
-            id: i.guild.id,
-            deny: [PermissionsBitField.Flags.ViewChannel]
+            id: interaction.guild.id,
+            deny: [PermissionFlagsBits.ViewChannel]
           },
           {
-            id: i.user.id,
+            id: interaction.user.id,
             allow: [
-              PermissionsBitField.Flags.ViewChannel,
-              PermissionsBitField.Flags.SendMessages
-            ]
-          },
-          {
-            id: "STAFF_ROLE_ID",
-            allow: [
-              PermissionsBitField.Flags.ViewChannel,
-              PermissionsBitField.Flags.SendMessages
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages
             ]
           }
         ]
       });
 
-      const btn = new ButtonBuilder()
-        .setCustomId("close")
-        .setLabel("Kapat")
-        .setStyle(ButtonStyle.Danger);
+      const row = new ActionRowBuilder()
+      .addComponents(
 
-      ch.send({
-        content: "🎫 Ticket açıldı | 🟡 inceleniyor...",
-        components: [new ActionRowBuilder().addComponents(btn)]
+        new ButtonBuilder()
+        .setCustomId("ticket_kapat")
+        .setLabel("🔒 Ticket Kapat")
+        .setStyle(ButtonStyle.Danger)
+
+      );
+
+      channel.send({
+        content: `${interaction.user}`,
+        embeds: [
+          new EmbedBuilder()
+          .setColor("Green")
+          .setTitle("Ticket Açıldı")
+          .setDescription("Yetkililer yakında ilgilenecek.")
+        ],
+        components: [row]
       });
 
-      return i.reply({ content: "Ticket açıldı", ephemeral: true });
+      return interaction.reply({
+        content: `Ticket oluşturuldu: ${channel}`,
+        ephemeral: true
+      });
+
     }
 
-    // FORM
-    if (i.values[0] === "apply") {
+    if(interaction.customId === "ticket_kapat") {
+
+      await interaction.reply({
+        content: "Ticket 5 saniye sonra kapanacak"
+      });
+
+      setTimeout(() => {
+        interaction.channel.delete();
+      }, 5000);
+
+    }
+
+    if(interaction.customId === "basvuru_yap") {
 
       const modal = new ModalBuilder()
-        .setCustomId("form")
-        .setTitle("Başvuru");
+      .setCustomId("basvuru_modal")
+      .setTitle("Başvuru Formu");
 
-      const age = new TextInputBuilder()
-        .setCustomId("age")
-        .setLabel("Yaş")
-        .setStyle(TextInputStyle.Short);
+      const yas = new TextInputBuilder()
+      .setCustomId("yas")
+      .setLabel("Yaşınız")
+      .setStyle(TextInputStyle.Short);
 
-      const exp = new TextInputBuilder()
-        .setCustomId("exp")
-        .setLabel("Tecrübe")
-        .setStyle(TextInputStyle.Paragraph);
+      const deneyim = new TextInputBuilder()
+      .setCustomId("deneyim")
+      .setLabel("Deneyiminiz")
+      .setStyle(TextInputStyle.Paragraph);
 
-      const why = new TextInputBuilder()
-        .setCustomId("why")
-        .setLabel("Neden biz?")
-        .setStyle(TextInputStyle.Paragraph);
+      const row1 = new ActionRowBuilder().addComponents(yas);
+      const row2 = new ActionRowBuilder().addComponents(deneyim);
 
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(age),
-        new ActionRowBuilder().addComponents(exp),
-        new ActionRowBuilder().addComponents(why)
-      );
+      modal.addComponents(row1, row2);
 
-      return i.showModal(modal);
+      return interaction.showModal(modal);
+
     }
-  }
 
-  // ================= FORM SUBMIT =================
-  if (i.isModalSubmit() && i.customId === "form") {
+    if(interaction.customId.startsWith("onay_")) {
 
-    const age = i.fields.getTextInputValue("age");
-    const exp = i.fields.getTextInputValue("exp");
-    const why = i.fields.getTextInputValue("why");
-
-    const ch = await i.guild.channels.create({
-      name: `basvuru-${i.user.username}`
-    });
-
-    const embed = new EmbedBuilder()
-      .setTitle("🧾 BAŞVURU")
-      .setDescription(
-`👤 ${i.user}
-🎂 ${age}
-🧠 ${exp}
-❓ ${why}`
-      );
-
-    const ok = new ButtonBuilder()
-      .setCustomId(`ok_${i.user.id}`)
-      .setLabel("ONAYLA")
-      .setStyle(ButtonStyle.Success);
-
-    const no = new ButtonBuilder()
-      .setCustomId(`no_${i.user.id}`)
-      .setLabel("REDDET")
-      .setStyle(ButtonStyle.Danger);
-
-    ch.send({
-      content: "🛡️ BAŞVURU PANEL",
-      embeds: [embed],
-      components: [new ActionRowBuilder().addComponents(ok, no)]
-    });
-
-    return i.reply({ content: "Başvuru gönderildi", ephemeral: true });
-  }
-
-  // ================= CLOSE TICKET =================
-  if (i.isButton() && i.customId === "close") {
-
-    try {
-      await i.user.send("🎫 Ticket kapatıldı 🛡️");
-    } catch {}
-
-    await i.reply({ content: "Kapatılıyor...", ephemeral: true });
-
-    setTimeout(() => i.channel.delete().catch(() => {}), 1200);
-  }
-
-  // ================= APPROVE / REJECT FIX =================
-  if (i.isButton() && (i.customId.startsWith("ok_") || i.customId.startsWith("no_"))) {
-
-    const userId = i.customId.split("_")[1];
-
-    let channel = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
-
-    // kanal yoksa oluştur
-    if (!channel) {
-      channel = await i.guild.channels.create({
-        name: "basvuru-sonuc"
+      return interaction.reply({
+        content:
+        "✅ Başvurunuz onaylandı, tebrikler. Sıradaki aşama sesli mülakattır. Lütfen mülakat için yetkilileri bekleyin.",
+        ephemeral: true
       });
+
     }
 
-    if (i.customId.startsWith("ok_")) {
-      channel.send(`🟢 <@${userId}> BAŞVURUN ONAYLANDI 🎉`);
-      return i.reply({ content: "Onaylandı", ephemeral: true });
+    if(interaction.customId.startsWith("red_")) {
+
+      return interaction.reply({
+        content:
+        "❌ Başvurunuz reddedildi. Daha sonra tekrar başvurabilirsiniz.",
+        ephemeral: true
+      });
+
     }
 
-    if (i.customId.startsWith("no_")) {
-      channel.send(`🔴 <@${userId}> BAŞVURUN REDDEDİLDİ ❌`);
-      return i.reply({ content: "Reddedildi", ephemeral: true });
-    }
   }
+
+  if(interaction.isModalSubmit()) {
+
+    if(interaction.customId === "basvuru_modal") {
+
+      const yas = interaction.fields.getTextInputValue("yas");
+      const deneyim = interaction.fields.getTextInputValue("deneyim");
+
+      const kanal = interaction.guild.channels.cache.find(
+        c => c.name === "başvurular"
+      );
+
+      if(kanal) {
+
+        const row = new ActionRowBuilder()
+        .addComponents(
+
+          new ButtonBuilder()
+          .setCustomId(`onay_${interaction.user.id}`)
+          .setLabel("✅ Onayla")
+          .setStyle(ButtonStyle.Success),
+
+          new ButtonBuilder()
+          .setCustomId(`red_${interaction.user.id}`)
+          .setLabel("❌ Reddet")
+          .setStyle(ButtonStyle.Danger)
+
+        );
+
+        kanal.send({
+          embeds: [
+            new EmbedBuilder()
+            .setColor("Orange")
+            .setTitle("Yeni Başvuru")
+            .addFields(
+              {
+                name: "Kullanıcı",
+                value: `${interaction.user.tag}`
+              },
+              {
+                name: "Yaş",
+                value: yas
+              },
+              {
+                name: "Deneyim",
+                value: deneyim
+              }
+            )
+          ],
+          components: [row]
+        });
+
+      }
+
+      return interaction.reply({
+        content: "Başvurunuz gönderildi",
+        ephemeral: true
+      });
+
+    }
+
+  }
+
 });
 
-// ================= LOGIN =================
 client.login(process.env.TOKEN);
