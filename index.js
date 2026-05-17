@@ -1,248 +1,269 @@
 require("dotenv").config();
 
 const {
-  Client,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder,
-  EmbedBuilder,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ChannelType,
-  PermissionFlagsBits,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle
+    Client,
+    GatewayIntentBits,
+    PermissionsBitField,
+    ChannelType,
+    ActionRowBuilder,
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    EmbedBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    Events
 } = require("discord.js");
 
+const {
+    joinVoiceChannel
+} = require("@discordjs/voice");
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ]
 });
 
-/* =========================
-   AKTİFLİK SİSTEMİ
-========================= */
-const msgCount = new Map();
+client.once("ready", async () => {
+    console.log(`${client.user.tag} aktif!`);
 
-client.on("messageCreate", (m) => {
-  if (m.author.bot) return;
-  msgCount.set(m.author.id, (msgCount.get(m.author.id) || 0) + 1);
+    // 7/24 ses
+    const channel = client.channels.cache.get(process.env.VOICE_CHANNEL);
+
+    if (channel) {
+        joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+            selfDeaf: false
+        });
+
+        console.log("Ses kanalına bağlandı.");
+    }
+
+    // Slash command register
+    await client.application.commands.set([
+        {
+            name: "panel",
+            description: "Ticket paneli oluşturur"
+        }
+    ], process.env.GUILD_ID);
+
+    console.log("Slash komutları register edildi.");
 });
 
-/* =========================
-   SLASH COMMANDS
-========================= */
-const commands = [
-  new SlashCommandBuilder().setName("ticket").setDescription("🎫 Ticket panel"),
-  new SlashCommandBuilder().setName("basvuru").setDescription("📋 Başvuru panel"),
-  new SlashCommandBuilder().setName("aktif").setDescription("📊 En aktif kullanıcı"),
-  new SlashCommandBuilder().setName("cekilis").setDescription("🎉 Çekiliş başlat")
-].map(c => c.toJSON());
+client.on(Events.InteractionCreate, async interaction => {
 
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+    // PANEL
+    if (interaction.isChatInputCommand()) {
 
-(async () => {
-  await rest.put(
-    Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-    { body: commands }
-  );
-  console.log("Slash hazır");
-})();
+        if (interaction.commandName === "panel") {
 
-/* =========================
-   READY
-========================= */
-client.once("ready", () => {
-  console.log(`${client.user.tag} online`);
-});
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId("ticket-menu")
+                .setPlaceholder("Bir kategori seçin")
+                .addOptions([
+                    {
+                        label: "Teknik Destek",
+                        value: "teknik"
+                    },
+                    {
+                        label: "Satın Alım",
+                        value: "satin"
+                    },
+                    {
+                        label: "Feedback",
+                        value: "feedback"
+                    },
+                    {
+                        label: "Partnership",
+                        value: "partner"
+                    },
+                    {
+                        label: "Başvuru",
+                        value: "basvuru"
+                    }
+                ]);
 
-/* =========================
-   INTERACTIONS
-========================= */
-client.on("interactionCreate", async (i) => {
+            const row = new ActionRowBuilder().addComponents(menu);
 
-  /* ===== SLASH ===== */
-  if (i.isChatInputCommand()) {
+            const embed = new EmbedBuilder()
+                .setTitle("Destek Paneli")
+                .setDescription("Aşağıdan kategori seçerek ticket açabilirsiniz.")
+                .setColor("Blue");
 
-    /* TICKET */
-    if (i.commandName === "ticket") {
-
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId("ticket_menu")
-        .setPlaceholder("🎫 Kategori seç")
-        .addOptions(
-          { label: "Teknik Destek", value: "tech" },
-          { label: "Satın Alım", value: "buy" },
-          { label: "Feedback", value: "feed" },
-          { label: "Destek", value: "support" }
-        );
-
-      return i.reply({
-        embeds: [new EmbedBuilder().setTitle("🎫 Ticket Sistemi").setColor("Blue")],
-        components: [new ActionRowBuilder().addComponents(menu)]
-      });
+            await interaction.reply({
+                embeds: [embed],
+                components: [row]
+            });
+        }
     }
 
-    /* BASVURU */
-    if (i.commandName === "basvuru") {
+    // DROPDOWN
+    if (interaction.isStringSelectMenu()) {
 
-      const btn = new ButtonBuilder()
-        .setCustomId("basvuru_open")
-        .setLabel("📋 Başvuru Yap")
-        .setStyle(ButtonStyle.Success);
+        if (interaction.customId === "ticket-menu") {
 
-      return i.reply({
-        embeds: [new EmbedBuilder().setTitle("📋 Başvuru").setColor("Green")],
-        components: [new ActionRowBuilder().addComponents(btn)]
-      });
+            // Başvuru modalı
+            if (interaction.values[0] === "basvuru") {
+
+                const modal = new ModalBuilder()
+                    .setCustomId("basvuru-modal")
+                    .setTitle("Başvuru Formu");
+
+                const age = new TextInputBuilder()
+                    .setCustomId("yas")
+                    .setLabel("Yaşınız")
+                    .setStyle(TextInputStyle.Short);
+
+                const exp = new TextInputBuilder()
+                    .setCustomId("tecrube")
+                    .setLabel("Tecrübeniz")
+                    .setStyle(TextInputStyle.Paragraph);
+
+                const row1 = new ActionRowBuilder().addComponents(age);
+                const row2 = new ActionRowBuilder().addComponents(exp);
+
+                modal.addComponents(row1, row2);
+
+                return await interaction.showModal(modal);
+            }
+
+            // Ticket oluştur
+            const channel = await interaction.guild.channels.create({
+                name: `ticket-${interaction.user.username}`,
+                type: ChannelType.GuildText,
+                permissionOverwrites: [
+                    {
+                        id: interaction.guild.id,
+                        deny: [PermissionsBitField.Flags.ViewChannel]
+                    },
+                    {
+                        id: interaction.user.id,
+                        allow: [
+                            PermissionsBitField.Flags.ViewChannel,
+                            PermissionsBitField.Flags.SendMessages
+                        ]
+                    }
+                ]
+            });
+
+            // Yetkili rolü
+            const supportRole = "YETKILI_ROL_ID";
+
+            await channel.permissionOverwrites.create(supportRole, {
+                ViewChannel: true,
+                SendMessages: true
+            });
+
+            const closeBtn = new ButtonBuilder()
+                .setCustomId("close-ticket")
+                .setLabel("Ticket Kapat")
+                .setStyle(ButtonStyle.Danger);
+
+            const row = new ActionRowBuilder().addComponents(closeBtn);
+
+            await channel.send({
+                content: `${interaction.user} hoş geldin.`,
+                components: [row]
+            });
+
+            await interaction.reply({
+                content: `Ticket oluşturuldu: ${channel}`,
+                ephemeral: true
+            });
+        }
     }
 
-    /* AKTİF */
-    if (i.commandName === "aktif") {
+    // MODAL
+    if (interaction.isModalSubmit()) {
 
-      const top = [...msgCount.entries()].sort((a,b)=>b[1]-a[1])[0];
-      if (!top) return i.reply("Veri yok");
+        if (interaction.customId === "basvuru-modal") {
 
-      const user = await client.users.fetch(top[0]);
+            const yas = interaction.fields.getTextInputValue("yas");
+            const tecrube = interaction.fields.getTextInputValue("tecrube");
 
-      return i.reply({
-        embeds: [
-          new EmbedBuilder()
-          .setTitle("📊 En Aktif")
-          .setDescription(`${user.tag}`)
-          .addFields({ name: "Mesaj", value: `${top[1]}` })
-        ]
-      });
+            const kanal = await interaction.guild.channels.create({
+                name: `basvuru-${interaction.user.username}`,
+                type: ChannelType.GuildText
+            });
+
+            const onay = new ButtonBuilder()
+                .setCustomId(`onay_${interaction.user.id}`)
+                .setLabel("Onayla")
+                .setStyle(ButtonStyle.Success);
+
+            const red = new ButtonBuilder()
+                .setCustomId(`red_${interaction.user.id}`)
+                .setLabel("Reddet")
+                .setStyle(ButtonStyle.Danger);
+
+            const row = new ActionRowBuilder().addComponents(onay, red);
+
+            const embed = new EmbedBuilder()
+                .setTitle("Yeni Başvuru")
+                .addFields(
+                    { name: "Kullanıcı", value: interaction.user.tag },
+                    { name: "Yaş", value: yas },
+                    { name: "Tecrübe", value: tecrube }
+                )
+                .setColor("Green");
+
+            await kanal.send({
+                embeds: [embed],
+                components: [row]
+            });
+
+            await interaction.reply({
+                content: "Başvurunuz gönderildi.",
+                ephemeral: true
+            });
+        }
     }
 
-    /* ÇEKİLİŞ */
-    if (i.commandName === "cekilis") {
+    // BUTTON
+    if (interaction.isButton()) {
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎉 ÇEKİLİŞ")
-        .setDescription("Katılmak için 🎉 bas")
-        .setColor("Gold");
+        // Ticket kapat
+        if (interaction.customId === "close-ticket") {
 
-      const msg = await i.reply({ embeds: [embed], fetchReply: true });
-      msg.react("🎉");
+            await interaction.reply("Ticket kapatılıyor...");
+
+            setTimeout(() => {
+                interaction.channel.delete();
+            }, 3000);
+        }
+
+        // Onay
+        if (interaction.customId.startsWith("onay_")) {
+
+            const userId = interaction.customId.split("_")[1];
+
+            const user = await client.users.fetch(userId);
+
+            user.send("🎉 Tebrikler! Başvurunuz onaylandı. Başarılar, sesli mülakata geçebilirsiniz.");
+
+            await interaction.reply("Başvuru onaylandı.");
+        }
+
+        // Red
+        if (interaction.customId.startsWith("red_")) {
+
+            const userId = interaction.customId.split("_")[1];
+
+            const user = await client.users.fetch(userId);
+
+            user.send("❌ Başvurunuz reddedildi.");
+
+            await interaction.reply("Başvuru reddedildi.");
+        }
     }
-  }
-
-  /* ===== TICKET ===== */
-  if (i.isStringSelectMenu()) {
-
-    if (i.customId === "ticket_menu") {
-
-      const type = i.values[0];
-
-      const channel = await i.guild.channels.create({
-        name: `ticket-${i.user.username}`,
-        type: ChannelType.GuildText,
-        permissionOverwrites: [
-          { id: i.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-          { id: i.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
-        ]
-      });
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("claim").setLabel("👮 Claim").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("inceleniyor").setLabel("⏳ İnceleniyor").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("cozuldu").setLabel("✅ Çözüldü").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("kapat").setLabel("🔒 Kapat").setStyle(ButtonStyle.Danger)
-      );
-
-      await channel.send({
-        content: `<@${i.user.id}>`,
-        embeds: [
-          new EmbedBuilder()
-          .setTitle("🎫 Ticket Açıldı")
-          .setDescription(`Kategori: ${type}`)
-          .setColor("Yellow")
-        ],
-        components: [row]
-      });
-
-      return i.reply({ content: `Ticket: ${channel}`, ephemeral: true });
-    }
-  }
-
-  /* ===== BUTTONS ===== */
-  if (i.isButton()) {
-
-    /* BASVURU */
-    if (i.customId === "basvuru_open") {
-
-      const modal = new ModalBuilder()
-        .setCustomId("basvuru_modal")
-        .setTitle("📋 Başvuru");
-
-      const yas = new TextInputBuilder()
-        .setCustomId("yas")
-        .setLabel("Yaş")
-        .setStyle(TextInputStyle.Short);
-
-      const deneyim = new TextInputBuilder()
-        .setCustomId("deneyim")
-        .setLabel("Deneyim")
-        .setStyle(TextInputStyle.Paragraph);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(yas),
-        new ActionRowBuilder().addComponents(deneyim)
-      );
-
-      return i.showModal(modal);
-    }
-
-    /* TICKET YETKİ */
-    const admin = i.member.permissions.has(PermissionFlagsBits.Administrator);
-    if (!admin) return;
-
-    if (i.customId === "claim") return i.reply("👮 alındı");
-    if (i.customId === "inceleniyor") return i.reply("⏳ inceleniyor");
-    if (i.customId === "cozuldu") return i.reply("✅ çözüldü");
-
-    if (i.customId === "kapat") {
-      await i.reply("kapanıyor");
-      setTimeout(() => i.channel.delete(), 3000);
-    }
-  }
-
-  /* ===== BASVURU MODAL ===== */
-  if (i.isModalSubmit()) {
-
-    if (i.customId === "basvuru_modal") {
-
-      const yas = i.fields.getTextInputValue("yas");
-      const deneyim = i.fields.getTextInputValue("deneyim");
-
-      const log = i.guild.channels.cache.find(c => c.name === "basvuru-sonuc");
-
-      if (!log)
-        return i.reply({ content: "basvuru-sonuc kanalı yok", ephemeral: true });
-
-      log.send({
-        embeds: [
-          new EmbedBuilder()
-          .setTitle("📋 Başvuru")
-          .addFields(
-            { name: "Kullanıcı", value: i.user.tag },
-            { name: "Yaş", value: yas },
-            { name: "Deneyim", value: deneyim }
-          )
-        ]
-      });
-
-      return i.reply({ content: "Gönderildi", ephemeral: true });
-    }
-  }
 
 });
 
