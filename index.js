@@ -3,8 +3,8 @@ require("dotenv").config();
 const {
 Client,
 GatewayIntentBits,
-PermissionsBitField,
 ChannelType,
+PermissionsBitField,
 ActionRowBuilder,
 StringSelectMenuBuilder,
 ModalBuilder,
@@ -16,9 +16,7 @@ EmbedBuilder,
 Events
 } = require("discord.js");
 
-const {
-joinVoiceChannel
-} = require("@discordjs/voice");
+const { joinVoiceChannel } = require("@discordjs/voice");
 
 const client = new Client({
 intents: [
@@ -30,483 +28,223 @@ GatewayIntentBits.GuildMembers
 ]
 });
 
+// SYSTEMS
 let ticketCount = 0;
+const coins = new Map();
 
-const economy = new Map();
-const levels = new Map();
-
-function addCoin(id, amount) {
-if (!economy.has(id)) economy.set(id, 0);
-economy.set(id, economy.get(id) + amount);
-}
-
-client.once("ready", async () => {
-
-console.log(`${client.user.tag} aktif`);
-
-client.user.setPresence({
-activities: [{
-name: "/panel",
-type: 3
-}],
-status: "online"
-});
-
+// ---------------- 7/24 VOICE SAFE ----------------
+function connectVoice() {
+try {
 const channel = client.channels.cache.get(process.env.VOICE_CHANNEL);
+if (!channel) return;
 
-if(channel){
 joinVoiceChannel({
 channelId: channel.id,
 guildId: channel.guild.id,
-adapterCreator: channel.guild.voiceAdapterCreator
+adapterCreator: channel.guild.voiceAdapterCreator,
+selfDeaf: false
 });
+
+console.log("🎧 Voice connected");
+} catch (err) {
+console.log("Voice error retrying...");
+setTimeout(connectVoice, 5000);
+}
 }
 
+// ---------------- READY ----------------
+client.once("ready", async () => {
+
+console.log(`${client.user.tag} online`);
+
+client.user.setPresence({
+activities: [{ name: "Ticket & Support System", type: 3 }],
+status: "online"
+});
+
+// voice loop (anti disconnect)
+connectVoice();
+setInterval(connectVoice, 60000);
+
+// SLASH REGISTER
 await client.application.commands.set([
-
-{
-name: "panel",
-description: "Ticket paneli"
-},
-
-{
-name: "coin",
-description: "Coin miktarı"
-},
-
-{
-name: "daily",
-description: "Günlük ödül"
-},
-
-{
-name: "profil",
-description: "Profil görüntüle"
-},
-
-{
-name: "yardim",
-description: "Komutlar"
-}
-
+{ name: "panel", description: "Ticket panel" },
+{ name: "coin", description: "Coin bak" },
+{ name: "daily", description: "Günlük coin" }
 ], process.env.GUILD_ID);
 
 });
 
-client.on("messageCreate", async message => {
+// ---------------- MESSAGE COIN FARM ----------------
+client.on("messageCreate", (m) => {
+if (m.author.bot) return;
 
-if(message.author.bot) return;
-
-addCoin(message.author.id, 5);
-
-if(!levels.has(message.author.id)){
-levels.set(message.author.id, {
-xp: 0,
-level: 1
-});
-}
-
-const data = levels.get(message.author.id);
-
-data.xp += 10;
-
-if(data.xp >= data.level * 100){
-data.level++;
-message.channel.send(`🎉 ${message.author} level atladı!`);
-}
-
+coins.set(m.author.id, (coins.get(m.author.id) || 0) + 5);
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+// ---------------- INTERACTION ----------------
+client.on(Events.InteractionCreate, async (i) => {
 
-if(interaction.isChatInputCommand()){
+// ---------------- SLASH ----------------
+if (i.isChatInputCommand()) {
 
-if(interaction.commandName === "yardim"){
-
-return interaction.reply({
-embeds: [
-new EmbedBuilder()
-.setTitle("Komutlar")
-.setDescription(`
-🎫 /panel
-💰 /coin
-🎁 /daily
-👤 /profil
-`)
-.setColor("Blue")
-]
-});
+if (i.commandName === "coin") {
+return i.reply(`💰 Coin: ${coins.get(i.user.id) || 0}`);
 }
 
-if(interaction.commandName === "coin"){
-
-const coin = economy.get(interaction.user.id) || 0;
-
-return interaction.reply(`💰 Coinin: ${coin}`);
+if (i.commandName === "daily") {
+coins.set(i.user.id, (coins.get(i.user.id) || 0) + 500);
+return i.reply("🎁 +500 coin");
 }
 
-if(interaction.commandName === "daily"){
-
-addCoin(interaction.user.id, 500);
-
-return interaction.reply("🎁 500 coin aldın!");
-}
-
-if(interaction.commandName === "profil"){
-
-const coin = economy.get(interaction.user.id) || 0;
-
-const level = levels.get(interaction.user.id)?.level || 1;
-
-return interaction.reply({
-embeds: [
-new EmbedBuilder()
-.setTitle(`${interaction.user.username} Profili`)
-.addFields(
-{
-name: "💰 Coin",
-value: `${coin}`
-},
-{
-name: "⭐ Level",
-value: `${level}`
-}
-)
-.setColor("Gold")
-]
-});
-}
-
-if(interaction.commandName === "panel"){
+if (i.commandName === "panel") {
 
 const menu = new StringSelectMenuBuilder()
-.setCustomId("ticket-menu")
+.setCustomId("ticket_menu")
 .setPlaceholder("Kategori seç")
-
 .addOptions([
-{
-label: "Teknik Destek",
-value: "destek"
-},
-
-{
-label: "Satın Alım",
-value: "satin"
-},
-
-{
-label: "Feedback",
-value: "feedback"
-},
-
-{
-label: "Partnership",
-value: "partner"
-},
-
-{
-label: "Başvuru",
-value: "basvuru"
-}
+{ label: "Destek", value: "support" },
+{ label: "Satın Alım", value: "buy" },
+{ label: "Feedback", value: "feedback" },
+{ label: "Başvuru", value: "apply" }
 ]);
 
-const row = new ActionRowBuilder()
-.addComponents(menu);
-
-return interaction.reply({
+return i.reply({
 embeds: [
 new EmbedBuilder()
-.setTitle("🎫 Destek Paneli")
-.setDescription("Aşağıdan kategori seç.")
+.setTitle("🎫 Ticket Panel")
 .setColor("Blue")
 ],
-components: [row]
+components: [new ActionRowBuilder().addComponents(menu)]
 });
 }
-
 }
 
-if(interaction.isStringSelectMenu()){
+// ---------------- DROPDOWN ----------------
+if (i.isStringSelectMenu()) {
 
-if(interaction.customId === "ticket-menu"){
-
-if(interaction.values[0] === "basvuru"){
+if (i.values[0] === "apply") {
 
 const modal = new ModalBuilder()
-.setCustomId("basvuru-modal")
+.setCustomId("apply_form")
 .setTitle("Başvuru Formu");
 
-const soru1 = new TextInputBuilder()
-.setCustomId("isim")
-.setLabel("İsim")
-.setStyle(TextInputStyle.Short);
-
-const soru2 = new TextInputBuilder()
-.setCustomId("yas")
-.setLabel("Yaş")
-.setStyle(TextInputStyle.Short);
-
-const soru3 = new TextInputBuilder()
-.setCustomId("aktiflik")
-.setLabel("Günlük aktiflik")
-.setStyle(TextInputStyle.Short);
-
-const soru4 = new TextInputBuilder()
-.setCustomId("neden")
-.setLabel("Neden seni seçmeliyiz?")
-.setStyle(TextInputStyle.Paragraph);
+const q1 = new TextInputBuilder().setCustomId("name").setLabel("İsim").setStyle(TextInputStyle.Short);
+const q2 = new TextInputBuilder().setCustomId("age").setLabel("Yaş").setStyle(TextInputStyle.Short);
+const q3 = new TextInputBuilder().setCustomId("reason").setLabel("Neden?").setStyle(TextInputStyle.Paragraph);
 
 modal.addComponents(
-new ActionRowBuilder().addComponents(soru1),
-new ActionRowBuilder().addComponents(soru2),
-new ActionRowBuilder().addComponents(soru3),
-new ActionRowBuilder().addComponents(soru4)
+new ActionRowBuilder().addComponents(q1),
+new ActionRowBuilder().addComponents(q2),
+new ActionRowBuilder().addComponents(q3)
 );
 
-return interaction.showModal(modal);
+return i.showModal(modal);
 }
 
+// ---------------- TICKET CREATE ----------------
 ticketCount++;
 
-const ticketId = ticketCount
-.toString()
-.padStart(4, "0");
+const id = String(ticketCount).padStart(4, "0");
 
-const channel = await interaction.guild.channels.create({
-
-name: `⚪・ticket-${ticketId}`,
-
+const ch = await i.guild.channels.create({
+name: `⚪-ticket-${id}`,
 type: ChannelType.GuildText,
-
 permissionOverwrites: [
-
 {
-id: interaction.guild.id,
+id: i.guild.id,
 deny: [PermissionsBitField.Flags.ViewChannel]
 },
-
 {
-id: interaction.user.id,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.SendMessages
-]
+id: i.user.id,
+allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
 },
-
 {
-id: process.env.SUPPORT_ROLE,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.SendMessages
-]
+id: process.env.STAFF_ROLE,
+allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
 }
-
 ]
-
 });
 
-const buttons = new ActionRowBuilder()
-.addComponents(
-
-new ButtonBuilder()
-.setCustomId("claim")
-.setLabel("📌 Claim")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("beklemede")
-.setLabel("⏳ Beklemede")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("close")
-.setLabel("🔒 Kapat")
-.setStyle(ButtonStyle.Danger)
-
+const row = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("claim").setLabel("📌 Claim").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("wait").setLabel("⏳ Beklemede").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("close").setLabel("🔒 Kapat").setStyle(ButtonStyle.Danger)
 );
 
-await channel.send({
-
-content: `${interaction.user}`,
-
+await ch.send({
+content: `${i.user}`,
 embeds: [
-
 new EmbedBuilder()
-.setTitle(`⚪ Ticket #${ticketId}`)
-.setDescription(`
-🎫 Ticket oluşturuldu.
-
-⏳ Durum: İnceleniyor
-📌 Yetkililer sizinle ilgilenecek.
-🔒 Ticketı kapatmak için buton kullanın.
-`)
+.setTitle(`⚪ Ticket #${id}`)
+.setDescription("Durum: İnceleniyor")
 .setColor("Blue")
-
 ],
-
-components: [buttons]
-
+components: [row]
 });
 
-return interaction.reply({
-content: `Ticket oluşturuldu: ${channel}`,
-ephemeral: true
-});
-
+return i.reply({ content: `Ticket açıldı: ${ch}`, ephemeral: true });
 }
 
-}
+// ---------------- MODAL ----------------
+if (i.isModalSubmit()) {
 
-if(interaction.isModalSubmit()){
-
-if(interaction.customId === "basvuru-modal"){
-
-const kanal = await interaction.guild.channels.create({
-
-name: `📝・basvuru-${interaction.user.username}`,
-
+const ch = await i.guild.channels.create({
+name: `📝-apply-${i.user.username}`,
 type: ChannelType.GuildText,
-
 permissionOverwrites: [
-
-{
-id: interaction.guild.id,
-deny: [PermissionsBitField.Flags.ViewChannel]
-},
-
-{
-id: interaction.user.id,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.SendMessages
+{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+{ id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel] },
+{ id: process.env.STAFF_ROLE, allow: [PermissionsBitField.Flags.ViewChannel] }
 ]
-},
-
-{
-id: process.env.OWNER_ID,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.SendMessages
-]
-},
-
-{
-id: process.env.SUPPORT_ROLE,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.SendMessages
-]
-}
-
-]
-
 });
 
-const row = new ActionRowBuilder()
-.addComponents(
+const embed = new EmbedBuilder()
+.setTitle("📝 Başvuru")
+.addFields(
+{ name: "İsim", value: i.fields.getTextInputValue("name") },
+{ name: "Yaş", value: i.fields.getTextInputValue("age") },
+{ name: "Sebep", value: i.fields.getTextInputValue("reason") }
+)
+.setColor("Green");
 
-new ButtonBuilder()
-.setCustomId(`onay_${interaction.user.id}`)
-.setLabel("✅ Onayla")
-.setStyle(ButtonStyle.Success),
-
-new ButtonBuilder()
-.setCustomId(`red_${interaction.user.id}`)
-.setLabel("❌ Reddet")
-.setStyle(ButtonStyle.Danger)
-
+const row = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId(`ok_${i.user.id}`).setLabel("Onay").setStyle(ButtonStyle.Success),
+new ButtonBuilder().setCustomId(`no_${i.user.id}`).setLabel("Red").setStyle(ButtonStyle.Danger)
 );
 
-await kanal.send({
+await ch.send({ embeds: [embed], components: [row] });
 
-embeds: [
-
-new EmbedBuilder()
-.setTitle("📝 Yeni Başvuru")
-.addFields(
-
-{
-name: "İsim",
-value: interaction.fields.getTextInputValue("isim")
-},
-
-{
-name: "Yaş",
-value: interaction.fields.getTextInputValue("yas")
-},
-
-{
-name: "Aktiflik",
-value: interaction.fields.getTextInputValue("aktiflik")
-},
-
-{
-name: "Neden?",
-value: interaction.fields.getTextInputValue("neden")
+return i.reply({ content: "Başvuru gönderildi", ephemeral: true });
 }
 
-)
-.setColor("Green")
+// ---------------- BUTTONS ----------------
+if (i.isButton()) {
 
-],
-
-components: [row]
-
-});
-
-return interaction.reply({
-content: "📝 Başvurun gönderildi.",
-ephemeral: true
-});
-
+if (i.customId === "claim") {
+return i.reply("📌 Claim alındı");
 }
 
+if (i.customId === "wait") {
+return i.reply("⏳ Beklemede");
 }
 
-if(interaction.isButton()){
-
-if(interaction.customId === "claim"){
-
-return interaction.reply("📌 Ticket claimlendi.");
+if (i.customId === "close") {
+await i.reply("🔒 Kapanıyor...");
+setTimeout(() => i.channel.delete(), 3000);
 }
 
-if(interaction.customId === "beklemede"){
-
-return interaction.reply("⏳ Ticket beklemeye alındı.");
+if (i.customId.startsWith("ok_")) {
+const id = i.customId.split("_")[1];
+client.users.fetch(id).then(u => u.send("✅ Başvurun onaylandı"));
+return i.reply("Onaylandı");
 }
 
-if(interaction.customId === "close"){
-
-await interaction.reply("🔒 Ticket kapanıyor...");
-
-setTimeout(() => {
-interaction.channel.delete();
-}, 3000);
-
+if (i.customId.startsWith("no_")) {
+const id = i.customId.split("_")[1];
+client.users.fetch(id).then(u => u.send("❌ Başvurun reddedildi"));
+return i.reply("Red");
 }
-
-if(interaction.customId.startsWith("onay_")){
-
-const id = interaction.customId.split("_")[1];
-
-const user = await client.users.fetch(id);
-
-await user.send("🎉 Tebrikler! Başvurunuz onaylandı.");
-
-return interaction.reply("✅ Başvuru onaylandı.");
-}
-
-if(interaction.customId.startsWith("red_")){
-
-const id = interaction.customId.split("_")[1];
-
-const user = await client.users.fetch(id);
-
-await user.send("❌ Başvurunuz reddedildi.");
-
-return interaction.reply("❌ Başvuru reddedildi.");
-}
-
 }
 
 });
